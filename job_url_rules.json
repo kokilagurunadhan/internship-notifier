@@ -1,0 +1,178 @@
+{
+  "version": 6,
+  "generic": {
+    "job_path_indicators": [
+      "job",
+      "jobs",
+      "position",
+      "positions",
+      "job-detail",
+      "jobdetails",
+      "job-details",
+      "opening",
+      "openings",
+      "detail",
+      "details"
+    ],
+    "rejected_segments": [
+      "search",
+      "results",
+      "stories",
+      "story",
+      "faq",
+      "faqs",
+      "program",
+      "programs",
+      "events",
+      "event",
+      "about",
+      "teams",
+      "locations",
+      "location",
+      "home"
+    ],
+    "search_query_keys": [
+      "q",
+      "query",
+      "keywords",
+      "base_query",
+      "search"
+    ],
+    "minimum_numeric_id_digits": 3,
+    "minimum_alphanumeric_id_length": 5
+  },
+  "companies": {
+    "Amazon": {
+      "name": "Amazon",
+      "domains": [
+        "amazon.jobs"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?jobs/\\d{4,}"
+      ]
+    },
+    "Google": {
+      "name": "Google",
+      "domains": [
+        "careers.google.com"
+      ],
+      "job_url_patterns": [
+        "/jobs/results/\\d{5,}"
+      ]
+    },
+    "Microsoft": {
+      "name": "Microsoft",
+      "domains": [
+        "microsoft.com",
+        "careers.microsoft.com",
+        "jobs.careers.microsoft.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?(?:job|jobs|share)/\\d{4,}"
+      ]
+    },
+    "Meta": {
+      "name": "Meta",
+      "domains": [
+        "metacareers.com"
+      ],
+      "job_url_patterns": [
+        "/(?:v2/)?jobs/\\d{6,}"
+      ]
+    },
+    "Apple": {
+      "name": "Apple",
+      "domains": [
+        "jobs.apple.com"
+      ],
+      "job_url_patterns": [
+        "/details/\\d+"
+      ]
+    },
+    "Netflix": {
+      "name": "Netflix",
+      "domains": [
+        "netflix.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?jobs/\\d+"
+      ]
+    },
+    "NVIDIA": {
+      "name": "NVIDIA",
+      "domains": [
+        "nvidia.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?job/.*/_R\\d+"
+      ]
+    },
+    "Adobe": {
+      "name": "Adobe",
+      "domains": [
+        "adobe.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?job/\\d+"
+      ]
+    },
+    "IBM": {
+      "name": "IBM",
+      "domains": [
+        "ibm.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?jobs/\\d+"
+      ]
+    },
+    "Oracle": {
+      "name": "Oracle",
+      "domains": [
+        "oracle.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?job/\\d+"
+      ]
+    },
+    "Salesforce": {
+      "name": "Salesforce",
+      "domains": [
+        "salesforce.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?jobs/\\d+"
+      ]
+    }
+  },
+  "ats": {
+    "Greenhouse": {
+      "domains": [
+        "greenhouse.io",
+        "boards.greenhouse.io"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?jobs/\\d+"
+      ]
+    },
+    "Lever": {
+      "domains": [
+        "lever.co",
+        "jobs.lever.co"
+      ],
+      "job_url_patterns": [
+        "/[^/]+/[a-zA-Z0-9-]{10,}"
+      ]
+    },
+    "Workday": {
+      "domains": [
+        "myworkdayjobs.com"
+      ],
+      "job_url_patterns": [
+        "/(?:.*/)?job/[^/?#]+(?:/[^/?#]+)?"
+      ]
+    }
+  },
+  "modern_pattern": {
+    "path_regex": "/(?:job|jobs|careers?|position|positions|opening|openings|details|share)(?:/[^/?#]+)*/(?:\\d{3,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9]+-[a-z0-9-]+)/?$"
+  }
+}

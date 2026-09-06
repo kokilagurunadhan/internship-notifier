@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Internship Notifier | Internships</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/internships.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<!-- =========================================================
+     NAVBAR
+     ========================================================= -->
+
+<nav class="navbar">
+
+    <div class="nav-inner">
+
+        <a
+            href="/"
+            class="brand"
+        >
+            🚀 Internship Notifier
+        </a>
+
+
+        <div class="nav-links">
+
+            <a
+                href="/"
+                class="nav-link"
+            >
+                🎯 Trackers
+            </a>
+
+
+            <a
+                href="/internships.html"
+                class="nav-link active"
+            >
+                💼 Internships
+            </a>
+
+        </div>
+
+    </div>
+
+</nav>
+
+
+
+<!-- =========================================================
+     MAIN
+     ========================================================= -->
+
+<main class="page">
+
+
+    <!-- =====================================================
+         HERO
+         ===================================================== -->
+
+    <section class="hero dashboard-hero">
+
+        <div class="hero-badge">
+
+            🟢 Tracking Engine Online
+
+        </div>
+
+
+        <h1>
+
+            💼 Internship Discovery Dashboard
+
+        </h1>
+
+
+        <p>
+
+            See the latest internships discovered by your
+            automated tracking engine.
+
+        </p>
+
+    </section>
+
+
+
+    <!-- =====================================================
+         ANALYTICS
+         ===================================================== -->
+
+    <section class="analytics-grid">
+
+
+        <div class="metric-card">
+
+            <div class="metric-icon">
+                🌐
+            </div>
+
+            <div>
+
+                <p class="metric-label">
+                    Total Jobs Crawled
+                </p>
+
+                <h2
+                    id="totalJobs"
+                    class="metric-value"
+                >
+                    0
+                </h2>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="metric-card">
+
+            <div class="metric-icon">
+                👥
+            </div>
+
+            <div>
+
+                <p class="metric-label">
+                    Active Subscribers
+                </p>
+
+                <h2
+                    id="activeSubscribers"
+                    class="metric-value"
+                >
+                    0
+                </h2>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="metric-card">
+
+            <div class="metric-icon">
+                📧
+            </div>
+
+            <div>
+
+                <p class="metric-label">
+                    Internship Alerts Sent
+                </p>
+
+                <h2
+                    id="notificationsSent"
+                    class="metric-value"
+                >
+                    0
+                </h2>
+
+            </div>
+
+        </div>
+
+
+    </section>
+
+
+
+    <!-- =====================================================
+         RECENT MATCHES
+         ===================================================== -->
+
+    <section class="card internships-section">
+
+
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    🔎 Recent Matches
+                </h2>
+
+                <p>
+                    High-relevance internships discovered by
+                    the tracking engine.
+                </p>
+
+            </div>
+
+
+            <button
+                id="refreshButton"
+                class="secondary-button"
+            >
+                🔄 Refresh
+            </button>
+
+        </div>
+
+
+
+        <!-- =================================================
+             LOADING
+             ================================================= -->
+
+        <div
+            id="loading"
+            class="loading-state"
+        >
+
+            <div class="spinner"></div>
+
+            <p>
+                Loading internships...
+            </p>
+
+        </div>
+
+
+
+        <!-- =================================================
+             EMPTY STATE
+             ================================================= -->
+
+        <div
+            id="emptyState"
+            class="empty-state hidden"
+        >
+
+            <div class="empty-icon">
+                🤖
+            </div>
+
+            <h3>
+                The tracking engine is warming up!
+            </h3>
+
+            <p>
+                Once the 12-hour background agent finishes
+                scanning your target companies, your
+                customized high-relevance feed will appear here.
+            </p>
+
+            <a
+                href="/"
+                class="primary-button empty-button"
+            >
+                🎯 Set Up Your First Tracker
+            </a>
+
+        </div>
+
+
+
+        <!-- =================================================
+             ERROR STATE
+             ================================================= -->
+
+        <div
+            id="errorState"
+            class="error-state hidden"
+        >
+
+            <div class="empty-icon">
+                ⚠️
+            </div>
+
+            <h3>
+                Unable to load internships
+            </h3>
+
+            <p id="errorMessage">
+                Something went wrong while contacting the
+                tracking engine.
+            </p>
+
+            <button
+                id="retryButton"
+                class="primary-button empty-button"
+            >
+                🔄 Try Again
+            </button>
+
+        </div>
+
+
+
+        <!-- =================================================
+             JOB GRID
+             ================================================= -->
+
+        <div
+            id="internshipsContainer"
+            class="internship-grid"
+        ></div>
+
+
+    </section>
+
+
+</main>
+
+
+
+<script src="/static/internships.js"></script>
+
+
+</body>
+
+</html>
