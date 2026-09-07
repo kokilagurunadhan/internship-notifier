@@ -51,57 +51,97 @@ router = APIRouter(
     response_model=SubscriptionResponse,
     status_code=status.HTTP_201_CREATED
 )
-async def create_subscription(
 
-    subscription: SubscriptionCreate,
+# ============================================================
+# CREATE SUBSCRIPTION
+# ============================================================
 
-    db: AsyncSession = Depends(get_db)
-
-):
-
-    new_subscription = Subscription(
-
-    user_email=subscription.user_email,
-
-    company=subscription.company,
-
-    domain=subscription.domain,
-
-    is_active=True,
-
-    status="ACTIVE"
-
+@router.post(
+    "",
+    response_model=SubscriptionResponse,
+    status_code=status.HTTP_201_CREATED
 )
+async def create_subscription(
+    subscription: SubscriptionCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    # --------------------------------------------------------
+    # CHECK ONLY THE EXACT COMBINATION:
+    # email + company + domain
+    # --------------------------------------------------------
+    result = await db.execute(
+        select(Subscription).where(
+            Subscription.user_email == subscription.user_email,
+            Subscription.company == subscription.company,
+            Subscription.domain == subscription.domain,
+        )
+    )
+
+    existing_subscription = result.scalar_one_or_none()
+
+    # --------------------------------------------------------
+    # EXACT COMBINATION ALREADY EXISTS
+    # --------------------------------------------------------
+    if existing_subscription:
+
+        # Active exact duplicate → reject
+        if (
+            existing_subscription.is_active
+            and existing_subscription.status == "ACTIVE"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "An active subscription already exists "
+                    "for this email, company and domain."
+                )
+            )
+
+        # Cancelled/inactive exact subscription → reactivate
+        existing_subscription.is_active = True
+        existing_subscription.status = "ACTIVE"
+
+        await db.commit()
+        await db.refresh(existing_subscription)
+
+        return existing_subscription
+
+    # --------------------------------------------------------
+    # DIFFERENT COMPANY / DOMAIN COMBINATION → NEW ROW
+    # --------------------------------------------------------
+    new_subscription = Subscription(
+        user_email=subscription.user_email,
+        company=subscription.company,
+        domain=subscription.domain,
+        is_active=True,
+        status="ACTIVE",
+    )
+
     db.add(new_subscription)
 
     try:
-
         await db.commit()
-
         await db.refresh(new_subscription)
 
     except IntegrityError:
-
         await db.rollback()
 
+        # Another request may have created the exact same
+        # email + company + domain concurrently.
         raise HTTPException(
-
             status_code=status.HTTP_409_CONFLICT,
-
             detail=(
                 "An active subscription already exists "
                 "for this email, company and domain."
             )
-
         )
 
     except Exception:
-
         await db.rollback()
-
         raise
 
     return new_subscription
+
 
 
 # ============================================================
