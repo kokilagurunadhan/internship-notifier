@@ -3,21 +3,85 @@
 # ============================================================
 
 import logging
+from pathlib import Path
 
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import onnxruntime as ort
+from tokenizers import Tokenizer
+
 
 logger = logging.getLogger(__name__)
+
+
 # ============================================================
-# LOAD MODEL ONCE
+# LOAD QINT8 ONNX MODEL ONCE
 # ============================================================
 
 logger.info("Loading semantic AI model")
 
-model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+MODEL_PATH = (
+    BASE_DIR
+    / "model_onnx"
+    / "model_quantized_qint8.onnx"
 )
-logger.info("Semantic AI model ready")
+
+TOKENIZER_PATH = (
+    BASE_DIR
+    / "model_onnx"
+    / "tokenizer.json"
+)
+
+
+if not MODEL_PATH.exists():
+    raise RuntimeError(
+        f"Semantic AI model not found: {MODEL_PATH}"
+    )
+
+if not TOKENIZER_PATH.exists():
+    raise RuntimeError(
+        f"Semantic AI tokenizer not found: {TOKENIZER_PATH}"
+    )
+
+
+# ------------------------------------------------------------
+# ONNX Runtime configuration
+# ------------------------------------------------------------
+
+session_options = ort.SessionOptions()
+
+session_options.intra_op_num_threads = 1
+session_options.inter_op_num_threads = 1
+session_options.execution_mode = (
+    ort.ExecutionMode.ORT_SEQUENTIAL
+)
+
+
+semantic_session = ort.InferenceSession(
+    str(MODEL_PATH),
+    sess_options=session_options,
+    providers=["CPUExecutionProvider"],
+)
+
+
+tokenizer = Tokenizer.from_file(
+    str(TOKENIZER_PATH)
+)
+
+tokenizer.enable_padding(
+    pad_token="[PAD]",
+    pad_id=0
+)
+
+tokenizer.enable_truncation(
+    max_length=128
+)
+
+
+logger.info(
+    "Semantic AI model ready: QInt8 ONNX Runtime"
+)
 
 
 # ============================================================
@@ -133,6 +197,98 @@ def get_domain_profile(domain):
 
 
 # ============================================================
+# ONNX EMBEDDING
+# ============================================================
+
+def _encode_texts(texts):
+    """
+    Generate sentence embeddings using the
+    QInt8 ONNX version of all-MiniLM-L6-v2.
+
+    Processing is equivalent to the original
+    SentenceTransformer mean-pooling + L2
+    normalization behavior.
+    """
+
+    encodings = tokenizer.encode_batch(
+        texts
+    )
+
+    inputs = {
+        "input_ids": np.array(
+            [encoding.ids for encoding in encodings],
+            dtype=np.int64
+        ),
+
+        "attention_mask": np.array(
+            [
+                encoding.attention_mask
+                for encoding in encodings
+            ],
+            dtype=np.int64
+        ),
+
+        "token_type_ids": np.array(
+            [
+                encoding.type_ids
+                for encoding in encodings
+            ],
+            dtype=np.int64
+        ),
+    }
+
+    outputs = semantic_session.run(
+        None,
+        inputs
+    )
+
+    token_embeddings = outputs[0]
+
+    # --------------------------------------------------------
+    # Mean pooling using attention mask
+    # --------------------------------------------------------
+
+    input_mask_expanded = np.expand_dims(
+        inputs["attention_mask"],
+        axis=-1
+    ).astype(np.float32)
+
+    sum_embeddings = np.sum(
+        token_embeddings
+        * input_mask_expanded,
+        axis=1
+    )
+
+    sum_mask = np.clip(
+        input_mask_expanded.sum(axis=1),
+        a_min=1e-9,
+        a_max=None
+    )
+
+    embeddings = (
+        sum_embeddings
+        / sum_mask
+    )
+
+    # --------------------------------------------------------
+    # L2 normalization
+    # --------------------------------------------------------
+
+    norms = np.linalg.norm(
+        embeddings,
+        axis=1,
+        keepdims=True
+    )
+
+    embeddings = (
+        embeddings
+        / np.maximum(norms, 1e-12)
+    )
+
+    return embeddings
+
+
+# ============================================================
 # SEMANTIC TITLE SCORE
 # ============================================================
 
@@ -149,6 +305,9 @@ def calculate_semantic_score(
 
     job_description is intentionally NOT used
     for semantic scoring.
+
+    Uses the QInt8 ONNX version of
+    all-MiniLM-L6-v2.
     """
 
     if not user_domain:
@@ -175,17 +334,21 @@ def calculate_semantic_score(
     {job_title}
     """
 
-    embeddings = model.encode(
+    embeddings = _encode_texts(
         [
             domain_profile,
             job_text
         ]
     )
 
-    similarity = cosine_similarity(
-        [embeddings[0]],
-        [embeddings[1]]
-    )[0][0]
+    # Both embeddings are already L2 normalized,
+    # therefore their dot product equals cosine similarity.
+    similarity = float(
+        np.dot(
+            embeddings[0],
+            embeddings[1]
+        )
+    )
 
     score = float(
         similarity * 100
