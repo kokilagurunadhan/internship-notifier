@@ -40,17 +40,14 @@ router = APIRouter()
 async def get_internships(
     company: str | None = None,
     location: str | None = None,
-    db: AsyncSession = Depends(get_db),
 ):
 
     internships = await get_all_internships(
-        db=db,
         company=company,
         location=location,
     )
 
     return internships
-
 
 # ============================================================
 # PUBLIC DASHBOARD
