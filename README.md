@@ -1,175 +1,262 @@
 # 🚀 Internship Notifier
 
-An automated internship discovery and notification system that searches for relevant internship opportunities, filters and ranks them using AI-based semantic relevance scoring, prevents duplicate notifications, and delivers grouped email alerts.
+An automated internship discovery and notification system that searches for relevant internship opportunities, strictly filters internship listings, ranks them using AI-based semantic relevance scoring, prevents duplicate notifications, and delivers grouped email alerts.
 
-The system is designed as a production-style asynchronous application with automated scheduling, PostgreSQL persistence, notification idempotency, retry handling, and retention management.
+The system is built as a **production-oriented asynchronous application** using FastAPI, PostgreSQL, SerpAPI, APScheduler, ONNX Runtime, and Resend.
+
+It includes automated scheduling, URL-based global internship uniqueness, user-level notification deduplication, notification idempotency, email retry handling, concurrency protection, and 45-day retention cleanup.
 
 ---
 
-## 🎯 What Problem Does It Solve?
+## 🌐 Live Demo
+
+**Application:**
+https://internship-notifier.onrender.com
+
+**GitHub Repository:**
+https://github.com/kokilagurunadhan/internship-notifier
+
+**Health Check:**
+https://internship-notifier.onrender.com/healthz
+
+---
+
+## 🖥️ Application Preview
+
+> Add screenshots of the application here after taking them from the deployed frontend.
+
+### Subscription Dashboard
+
+![Subscription Dashboard](docs/images/subscription-dashboard.png)
+
+### Internship Discovery Dashboard
+
+![Internship Dashboard](docs/images/internship-dashboard.png)
+
+### Email Notification
+
+![Email Notification](docs/images/email-notification.png)
+
+---
+
+# 🎯 What Problem Does It Solve?
 
 Finding internships manually across multiple companies and job platforms is repetitive and time-consuming.
 
-Internship Notifier automates this process:
+Internship Notifier automates the discovery process.
+
+A user provides:
+
+* Email address
+* Target company
+* Domain / role
+
+The system then automatically searches for relevant internship opportunities and notifies the user.
+
+### Core Workflow
 
 ```text
-User Subscription
-       ↓
+Subscription
+      ↓
 12-Hour Scheduler
-       ↓
+      ↓
 Grouped SerpAPI Search
-       ↓
+      ↓
 Parse / Normalize
-       ↓
-Strict Internship Filter
-       ↓
-AI Relevance Scoring
-       ↓
-Database URL Uniqueness
-       ↓
-7-Day User Notification Check
-       ↓
-Create PENDING Notification
-       ↓
-Group Notifications by Email
-       ↓
-Idempotency Check
-       ↓
-Send Email Digest
-       ↓
-SENT / Retry / FAILED
-       ↓
-45-Day Retention Cleanup
+      ↓
+Strict Internship Type Filter
+      ↓
+URL Decision
+      ↓
+┌─────────────────────────────┐
+│                             │
+│ NEW URL              EXISTING URL
+│   ↓                       ↓
+│ Posting Age ≤45d       DB Age ≤7d
+│   ↓                       ↓
+│ Global Internship      Reuse Global
+│ Upsert                 Internship
+│   │                       │
+└───┴───────────────┬───────┘
+                    ↓
+          For Each Active User
+                    ↓
+       7-Day Notification Check
+                    ↓
+          Calculate Relevance
+                    ↓
+             Score ≥ 50?
+              ↙       ↘
+            NO         YES
+            ↓           ↓
+      LOW_RELEVANCE   PENDING
+      No Notification   ↓
+                  Group by Email
+                        ↓
+                 Priority / Max 15
+                        ↓
+                    Idempotency
+                        ↓
+                  Send Email Digest
+                    ↙          ↘
+                  SENT        RETRY
+                                ↓
+                             FAILED
+```
+
+The 45-day database retention cleanup is a separate maintenance process.
+
+---
+
+# 🏗️ System Architecture
+![Internship Notifier System Architecture](docs/images/architecture.png)
+The complete production-oriented architecture consists of:
+
+```text
+                              ┌─────────────────────┐
+                              │        USER         │
+                              │ Email + Company +   │
+                              │ Domain / Role       │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │    SUBSCRIPTION     │
+                              │     PostgreSQL      │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │   12-HOUR SCHEDULER │
+                              │     APScheduler     │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │       SerpAPI       │
+                              │    Grouped Search   │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │  PARSE / NORMALIZE  │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │ STRICT INTERNSHIP   │
+                              │       FILTER        │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │     URL DECISION    │
+                              └──────────┬──────────┘
+                                         │
+                           ┌─────────────┴─────────────┐
+                           │                           │
+                           ▼                           ▼
+                    ┌──────────────┐           ┌──────────────┐
+                    │    NEW URL   │           │ EXISTING URL │
+                    └──────┬───────┘           └──────┬───────┘
+                           │                           │
+                           ▼                           ▼
+                    ┌──────────────┐           ┌──────────────┐
+                    │ Posting Age  │           │ DB Age ≤ 7d? │
+                    │    ≤ 45d?    │           └──────┬───────┘
+                    └──────┬───────┘                  │
+                           │                           ▼
+                           ▼                    ┌──────────────┐
+                    ┌──────────────┐            │    REUSE     │
+                    │    GLOBAL    │            │   GLOBAL     │
+                    │  INTERNSHIP  │            │ INTERNSHIP   │
+                    │    UPSERT    │            └──────┬───────┘
+                    └──────┬───────┘                   │
+                           │                           │
+                           └─────────────┬─────────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │ FOR EACH ACTIVE     │
+                              │       USER          │
+                              └──────────┬──────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │ ALREADY NOTIFIED    │
+                              │ WITHIN 7 DAYS?      │
+                              └──────────┬──────────┘
+                                         │
+                              ┌──────────┴──────────┐
+                              │                     │
+                             YES                   NO
+                              │                     │
+                              ▼                     ▼
+                            STOP           ┌─────────────────┐
+                                           │ AI RELEVANCE    │
+                                           │    SCORING       │
+                                           └────────┬────────┘
+                                                    │
+                                                    ▼
+                                           ┌─────────────────┐
+                                           │   SCORE ≥ 50?   │
+                                           └────────┬────────┘
+                                                    │
+                                           ┌────────┴────────┐
+                                           │                 │
+                                          NO                YES
+                                           │                 │
+                                           ▼                 ▼
+                                   ┌──────────────┐   ┌──────────────┐
+                                   │ LOW_RELEVANCE│   │   PENDING    │
+                                   │ No Notification│  │ Notification │
+                                   └──────────────┘   └──────┬───────┘
+                                                             │
+                                                             ▼
+                                                    ┌────────────────┐
+                                                    │ GROUP BY EMAIL │
+                                                    └───────┬────────┘
+                                                            │
+                                                            ▼
+                                                    ┌────────────────┐
+                                                    │ PRIORITY /     │
+                                                    │ MAX 15 JOBS    │
+                                                    └───────┬────────┘
+                                                            │
+                                                            ▼
+                                                    ┌────────────────┐
+                                                    │  IDEMPOTENCY   │
+                                                    └───────┬────────┘
+                                                            │
+                                                            ▼
+                                                    ┌────────────────┐
+                                                    │ EMAIL DISPATCH │
+                                                    │    RESEND      │
+                                                    └───────┬────────┘
+                                                            │
+                                                     ┌──────┴──────┐
+                                                     │             │
+                                                     ▼             ▼
+                                                   SENT          RETRY
+                                                                   │
+                                                                   ▼
+                                                                FAILED
 ```
 
 ---
 
-# ✨ Key Features
+# 🤖 AI Relevance Engine
 
-### 🔎 Automated Internship Discovery
+The project uses **`all-MiniLM-L6-v2`** to calculate semantic similarity between a user's requested domain/role and internship content.
 
-* Searches internship opportunities automatically.
-* Uses SerpAPI for search discovery.
-* Searches are grouped to reduce unnecessary API requests.
-* Supports company and domain/role-based subscriptions.
-
-### 🎯 Strict Internship Filtering
-
-The system verifies that discovered jobs are actually internships before they enter the relevance pipeline.
-
-### 🤖 AI-Based Relevance Scoring
-
-The project uses `all-MiniLM-L6-v2` for semantic similarity scoring.
-
-The production inference pipeline uses:
-
-* ONNX Runtime
-* Dynamically quantized INT8 model
-* Tokenizers
-* Mean pooling
-* L2 normalization
-* Cosine similarity
-
-The minimum relevance threshold is:
-
-```text
-50
-```
-
-Only opportunities meeting the required relevance threshold proceed to notification creation.
-
-### ⏰ Automated 12-Hour Scheduler
-
-The internship discovery process runs automatically every:
-
-```text
-12 hours
-```
-
-The scheduler is configured with:
-
-* UTC timezone
-* Maximum one concurrent scheduler instance
-* Coalescing of missed executions
-* Per-subscription-group failure isolation
-
-### 🛡️ Duplicate Protection
-
-The system uses multiple layers of duplicate protection.
-
-#### Global internship uniqueness
-
-Internships are identified using canonicalized URLs.
-
-This prevents tracking parameters and URL variations from creating duplicate global internship records.
-
-#### User notification duplicate protection
-
-A user is prevented from receiving the same internship repeatedly within the configured 7-day notification window.
-
-### 📧 Reliable Email Notification System
-
-Notifications are created before email delivery.
-
-The system supports:
-
-* PENDING state
-* PROCESSING state
-* SENT state
-* FAILED state
-* Retry handling
-* Exponential/backoff-style retry scheduling
-* Maximum retry attempts
-* Persistent idempotency keys
-* Concurrent email send limits
-* Zombie PROCESSING recovery
-* Maximum 15 internships per email
-
-### 🔐 Notification Idempotency
-
-Every notification has a persistent idempotency key.
-
-The same key is reused during retries to prevent accidental duplicate email delivery.
-
-### 🔄 Email Retry Handling
-
-Failed email attempts remain retryable.
-
-The production configuration supports:
-
-```text
-Maximum attempts: 5
-Base retry delay: 5 minutes
-```
-
-After the maximum retry count is reached, the notification is marked permanently as:
-
-```text
-FAILED
-```
-
-### 🧹 45-Day Retention
-
-Internships that have not been seen for more than 45 days are removed from the database.
-
-The cleanup uses `last_seen_at` so that actively rediscovered internships are retained even if they were originally created more than 45 days ago.
-
-Related notifications are removed through the database relationship.
-
----
-
-# 🧠 AI / Semantic Relevance Pipeline
-
-The relevance engine combines keyword-based and semantic signals to determine whether an internship matches a user's requested domain.
-
-The production semantic scorer uses:
+The production semantic pipeline is:
 
 ```text
 all-MiniLM-L6-v2
         ↓
-ONNX Runtime
+QInt8 ONNX Model
         ↓
-QInt8 Dynamic Quantization
+ONNX Runtime
         ↓
 Tokenization
         ↓
@@ -178,187 +265,344 @@ Mean Pooling
 L2 Normalization
         ↓
 Cosine Similarity
+        ↓
+Semantic Score
 ```
 
-The production ONNX model was validated against the original PyTorch implementation.
+The relevance engine combines keyword-based and semantic signals.
 
-The optimized inference path significantly reduces runtime dependency and memory requirements, making it more suitable for constrained deployment environments.
-
----
-
-# 🏗️ System Architecture
+Only opportunities meeting the production threshold continue to notification creation:
 
 ```text
-                    ┌───────────────────┐
-                    │      User         │
-                    │ Email + Company   │
-                    │ Domain / Role     │
-                    └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │   Subscription    │
-                    │     PostgreSQL    │
-                    └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │  12-Hour Scheduler│
-                    └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │      SerpAPI      │
-                    │  Grouped Search   │
-                    └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │ Parse / Normalize │
-                    └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │ Strict Internship │
-                    │      Filter       │
-                    └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │ Relevance Engine  │
-                    │   Score >= 50     │
-                    └─────────┬─────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    │                   │
-                    ▼                   ▼
-                 LOW SCORE           RELEVANT
-                    │                   │
-                    ▼                   ▼
-                  STOP             URL Check
-                                        │
-                              ┌─────────┴─────────┐
-                              │                   │
-                           NEW URL           EXISTING URL
-                              │                   │
-                              ▼                   ▼
-                       Global Internship      Reuse
-                           Record             Existing
-                              │                   │
-                              └─────────┬─────────┘
-                                        │
-                                        ▼
-                              7-Day User Duplicate
-                                      Check
-                                        │
-                                        ▼
-                              Create PENDING
-                                 Notification
-                                        │
-                                        ▼
-                              Group by Email
-                                        │
-                                        ▼
-                                  Idempotency
-                                        │
-                                        ▼
-                                Email Dispatcher
-                                        │
-                              ┌─────────┴─────────┐
-                              │                   │
-                              ▼                   ▼
-                            SENT              RETRY
-                                                  │
-                                                  ▼
-                                               FAILED
+Minimum Relevance Score = 50
 ```
+
+### Why ONNX?
+
+The original PyTorch-based model was converted to ONNX and dynamically quantized to QInt8.
+
+This provides:
+
+* Lower runtime memory usage
+* Smaller production model footprint
+* Reduced heavy ML dependencies
+* CPU-friendly inference
+* Better suitability for constrained deployment environments
+
+The optimized model was validated against the original implementation.
 
 ---
 
-# 🗄️ Database
+# 🔎 Automated Internship Discovery
 
-The application uses:
+The system automatically searches for internships using SerpAPI.
 
-* PostgreSQL
-* SQLAlchemy
-* asyncpg
-* Alembic
-* pgvector extension
+Search requests are grouped to reduce unnecessary API calls.
 
-Main entities include:
+The search pipeline includes:
 
 ```text
 Subscription
-     │
-     └──────────────┐
-                    │
-                    ▼
-               Notification
-                    │
-                    ▼
-                Internship
+      ↓
+Search Query Generation
+      ↓
+Grouped SerpAPI Requests
+      ↓
+Pagination / Request Limits
+      ↓
+Retry Handling
+      ↓
+Parse Search Results
+      ↓
+Normalize Jobs
 ```
 
-### Subscription uniqueness
+Search protection includes:
 
-A subscription is uniquely identified by:
+* Request limits
+* Pagination limits
+* API error handling
+* Retry handling
+* HTTP 429 handling
+* Retry-After support
+* Network failure handling
+* Search failure isolation
+* Multi-company failure isolation
+
+---
+
+# 🎯 Strict Internship Filtering
+
+Search engines can return many job types that are not internships.
+
+The system therefore performs a strict internship-type validation before relevance scoring.
+
+```text
+Search Result
+     ↓
+Parse
+     ↓
+Normalize
+     ↓
+Internship Type Verification
+     ↓
+Valid Internship
+```
+
+Invalid opportunities are rejected before entering the relevance pipeline.
+
+---
+
+# 🛡️ Duplicate Protection
+
+The system uses multiple layers of duplicate protection.
+
+## 1. Global Internship URL Uniqueness
+
+Internships are identified using canonicalized URLs.
+
+For example:
+
+```text
+https://example.com/job/123
+```
+
+and:
+
+```text
+https://example.com/job/123?utm_source=google
+```
+
+can resolve to the same canonical URL.
+
+This prevents tracking parameters and URL variations from creating duplicate global internship records.
+
+---
+
+## 2. New Internship Posting Age
+
+For a completely new URL:
+
+```text
+New URL
+   ↓
+Posting Age ≤45 Days?
+   ↓
+YES → Save
+NO  → Reject
+```
+
+This prevents very old postings from entering the system.
+
+---
+
+## 3. Existing Internship Age
+
+If the URL already exists globally:
+
+```text
+Existing URL
+      ↓
+Internship DB Age ≤7 Days?
+      ↓
+YES → Reuse
+NO  → Treat as stale
+```
+
+This is separate from the 45-day new-posting rule.
+
+---
+
+## 4. User Notification Duplicate Protection
+
+A user cannot repeatedly receive the same internship within the configured 7-day notification window.
+
+```text
+Same Internship
+      ↓
+Already Notified User?
+      ↓
+YES → STOP
+NO  → Continue
+```
+
+This means global internship identity and user notification history remain separate.
+
+---
+
+# 👥 Multiple Subscriptions Per User
+
+A user can track multiple companies and domains using the same email address.
+
+Subscription uniqueness is based on:
 
 ```text
 user_email + company + domain
 ```
 
-This allows the same user to track multiple companies and domains while preventing the exact same subscription from being duplicated.
-
-Example:
+For example, all of the following can coexist:
 
 ```text
 user@example.com + Amazon + software
 user@example.com + Google + software
 user@example.com + Microsoft + software
 user@example.com + Amazon + data
+user@example.com + Google + backend
 ```
 
-All can coexist.
+But an exact duplicate such as:
+
+```text
+user@example.com + Amazon + software
+```
+
+cannot be inserted twice.
+
+Cancelled subscriptions can also be reactivated instead of creating duplicate records.
 
 ---
 
-# 📬 Notification Lifecycle
+# ⏰ Automated 12-Hour Scheduler
+
+The internship discovery process runs automatically every:
+
+```text
+12 hours
+```
+
+The scheduler uses:
+
+* APScheduler
+* UTC timezone
+* Maximum one concurrent scheduler instance
+* Coalescing of missed executions
+* Subscription-group failure isolation
+
+Configuration:
+
+```text
+CHECK_INTERVAL_MINUTES = 720
+MAX_INSTANCES = 1
+COALESCE = true
+```
+
+The scheduler invokes the same production pipeline used during production verification.
+
+---
+
+# 📧 Notification System
+
+Notifications are created before email delivery.
+
+The notification lifecycle is:
 
 ```text
 PENDING
-   │
-   ▼
+   ↓
 PROCESSING
+   ├──────────────→ SENT
    │
-   ├──────────────► SENT
-   │
-   └──────────────► RETRY
-                       │
-                       ▼
+   └──────────────→ RETRY
+                       ↓
                    PROCESSING
                        │
-                       └────► FAILED
+                       └────────────→ FAILED
 ```
 
-The system uses atomic notification claiming to prevent multiple workers from processing the same notification simultaneously.
+The dispatcher supports:
 
-Database row locking with:
+* Pending notifications
+* Atomic notification claiming
+* Processing state
+* Email grouping by recipient
+* Maximum 15 internships per email
+* Persistent idempotency keys
+* Retry handling
+* Maximum retry attempts
+* Concurrent email limits
+* Zombie-processing recovery
+* Permanent failure handling
+
+---
+
+# 🔐 Notification Idempotency
+
+Every notification receives a persistent idempotency key.
+
+The same key is reused during retries.
 
 ```text
-SELECT ... FOR UPDATE SKIP LOCKED
+Notification
+     ↓
+Persistent Idempotency Key
+     ↓
+Email Attempt
+     ↓
+Failure
+     ↓
+Retry
+     ↓
+Same Idempotency Key
 ```
 
-is used during notification claiming.
+This prevents retries from accidentally generating duplicate email operations.
+
+---
+
+# 🔄 Email Retry Handling
+
+Failed email attempts remain retryable.
+
+Production configuration:
+
+```text
+Maximum Attempts: 5
+Base Retry Delay: 5 minutes
+```
+
+The lifecycle is:
+
+```text
+Attempt 1
+   ↓
+Failure
+   ↓
+Retry
+   ↓
+Attempt 2
+   ↓
+Failure
+   ↓
+Retry
+   ↓
+...
+   ↓
+Attempt 5
+   ↓
+FAILED
+```
+
+After the maximum retry count is reached, the notification is permanently marked:
+
+```text
+FAILED
+```
 
 ---
 
 # 🛡️ Concurrency Safety
 
-The notification system was tested under concurrent execution.
+The notification dispatcher uses database row locking to prevent multiple workers from processing the same notification.
 
-Multiple workers attempted to create the same notification simultaneously.
+Notification claiming uses:
 
-Expected result:
+```sql
+SELECT ... FOR UPDATE SKIP LOCKED
+```
+
+This allows concurrent workers to safely claim different notifications without processing the same notification simultaneously.
+
+A concurrent notification creation test verified:
 
 ```text
 10 concurrent workers
@@ -372,20 +616,185 @@ The database uniqueness constraint prevents duplicate notification records.
 
 ---
 
+# 🧟 Zombie Processing Recovery
+
+If a notification remains in:
+
+```text
+PROCESSING
+```
+
+for longer than the configured processing timeout, it can be recovered and returned to a retryable state.
+
+Current processing timeout:
+
+```text
+15 minutes
+```
+
+This protects the system from permanently stuck notification records.
+
+---
+
+# 🧹 45-Day Database Retention
+
+The system performs database retention cleanup separately from the new-job posting-age filter.
+
+Internships that have not been seen for more than 45 days are removed.
+
+The cleanup uses:
+
+```text
+last_seen_at
+```
+
+rather than `created_at`.
+
+This means an internship originally created more than 45 days ago can remain in the database if it is still being rediscovered.
+
+```text
+last_seen_at > 45 days
+        ↓
+DELETE Internship
+        ↓
+Related Notifications
+        ↓
+Cascade Delete
+```
+
+The retention cleanup was tested with both old and recently seen internships.
+
+---
+
+# 🗄️ Database
+
+The application uses:
+
+* PostgreSQL
+* SQLAlchemy
+* asyncpg
+* Alembic
+* pgvector
+
+### Main entities
+
+```text
+┌─────────────────┐
+│   Subscription  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Notification   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Internship    │
+└─────────────────┘
+```
+
+### Subscription
+
+Important fields include:
+
+```text
+id
+user_email
+company
+domain
+is_active
+status
+created_at
+```
+
+### Internship
+
+Important fields include:
+
+```text
+id
+title
+company
+location
+url
+description
+source
+via
+relevance_score
+passed_filter
+created_at
+last_seen_at
+```
+
+### Notification
+
+Important fields include:
+
+```text
+id
+subscription_id
+internship_id
+status
+relevance_score
+retry_count
+next_retry_at
+idempotency_key
+created_at
+```
+
+---
+
+# 📬 Notification Grouping
+
+Notifications are created individually for users and internships.
+
+Before email delivery, pending notifications are grouped by normalized email address.
+
+```text
+User A
+ ├── Internship 1
+ ├── Internship 2
+ └── Internship 3
+
+User B
+ ├── Internship 4
+ └── Internship 5
+```
+
+The dispatcher then creates grouped email digests.
+
+Maximum:
+
+```text
+15 internships per email
+```
+
+Jobs are prioritized before the final email is generated.
+
+---
+
 # 🧪 Testing
 
-The project has a comprehensive automated test suite.
+The project has a comprehensive automated regression and production-hardening test suite.
 
-Current regression result:
+Current full regression:
 
 ```text
 193 passed
 ```
 
-The production hardening tests cover areas including:
+Test coverage includes:
 
 * URL canonicalization
-* Duplicate internship detection
+* Global internship uniqueness
+* Subscription uniqueness
+* Multiple subscriptions per user
+* Subscription reactivation
+* Strict internship filtering
+* Relevance scoring
+* Relevance threshold boundaries
+* ONNX scorer validation
 * 7-day notification protection
 * Notification idempotency
 * Concurrent notification creation
@@ -393,62 +802,71 @@ The production hardening tests cover areas including:
 * Maximum retry failure
 * 45-day retention cleanup
 * Scheduler configuration
-* ONNX relevance scoring
-* Relevance threshold boundaries
 * API behavior
 * Database behavior
-
-A real production E2E cycle was also verified.
-
-The production test confirmed:
-
-```text
-SerpAPI search
-      ↓
-Internship discovered
-      ↓
-Filtering
-      ↓
-Relevance scoring
-      ↓
-Notification created
-      ↓
-Email sent
-      ↓
-Notification = SENT
-```
-
-A second production cycle correctly reused the existing internship and blocked the duplicate notification within the 7-day window.
+* Production configuration
 
 ---
 
-# 🌐 Deployment
+# 🌐 Production End-to-End Verification
 
-The application is deployed as a FastAPI web service with PostgreSQL.
+A real production database and email delivery cycle was verified.
 
-Production components:
+The production cycle confirmed:
 
 ```text
-FastAPI
-   │
-   ├── PostgreSQL
-   │
-   ├── SerpAPI
-   │
-   ├── Resend
-   │
-   ├── APScheduler
-   │
-   └── ONNX Runtime
+Active Subscription
+       ↓
+12-Hour Scheduler Function
+       ↓
+SerpAPI Search
+       ↓
+Internship Discovery
+       ↓
+Strict Filtering
+       ↓
+Relevance Scoring
+       ↓
+Notification Creation
+       ↓
+Notification Dispatcher
+       ↓
+Resend
+       ↓
+Email Received
+       ↓
+Notification = SENT
 ```
 
-Production health endpoint:
+A second production cycle was also verified.
+
+The second cycle correctly:
 
 ```text
+Existing Internship
+       ↓
+Reuse Global Internship
+       ↓
+7-Day Duplicate Check
+       ↓
+Duplicate Detected
+       ↓
+No New Notification
+```
+
+This verified the core production behavior of the notification system.
+
+---
+
+# 🩺 Health Monitoring
+
+The application exposes:
+
+```http
 GET /healthz
 ```
 
-Expected response:
+Expected healthy response:
 
 ```json
 {
@@ -457,14 +875,46 @@ Expected response:
 }
 ```
 
+The endpoint verifies that the application is running and can connect to PostgreSQL.
+
+---
+
+# 🌐 Deployment
+
+The application is deployed using:
+
+```text
+Render Web Service
+        │
+        ├── FastAPI
+        │
+        ├── PostgreSQL
+        │
+        ├── SerpAPI
+        │
+        ├── Resend
+        │
+        ├── APScheduler
+        │
+        └── ONNX Runtime
+```
+
+Production configuration is supplied through environment variables.
+
+The scheduler is enabled in production using:
+
+```text
+SCHEDULER_ENABLED=true
+```
+
 ---
 
 # 🛠️ Technology Stack
 
 | Category                | Technology                 |
 | ----------------------- | -------------------------- |
-| Backend                 | FastAPI                    |
 | Language                | Python                     |
+| Backend                 | FastAPI                    |
 | Database                | PostgreSQL                 |
 | ORM                     | SQLAlchemy                 |
 | Database Driver         | asyncpg                    |
@@ -478,8 +928,8 @@ Expected response:
 | Email                   | Resend                     |
 | Vector Database Support | pgvector                   |
 | Frontend                | HTML, CSS, JavaScript      |
-| Deployment              | Render                     |
 | Testing                 | Pytest                     |
+| Deployment              | Render                     |
 | Version Control         | Git / GitHub               |
 
 ---
@@ -556,14 +1006,14 @@ cd internship-notifier
 
 ## 2. Create a virtual environment
 
-Windows:
+### Windows
 
 ```powershell
 python -m venv venv
 venv\Scripts\activate
 ```
 
-Linux/macOS:
+### Linux / macOS
 
 ```bash
 python -m venv venv
@@ -590,7 +1040,7 @@ using:
 .env.example
 ```
 
-Required configuration includes:
+Required configuration:
 
 ```text
 DATABASE_URL=
@@ -601,7 +1051,7 @@ SCHEDULER_ENABLED=
 CORS_ORIGINS=
 ```
 
-Never commit `.env` or real API credentials.
+Never commit real credentials.
 
 ## 5. Run database migrations
 
@@ -615,50 +1065,48 @@ alembic upgrade head
 uvicorn main:app --reload
 ```
 
-The application will be available locally through the FastAPI server.
-
 ---
 
 # 📡 API Endpoints
 
-### Health
+## Health
 
 ```http
 GET /healthz
 ```
 
-### Dashboard
+## Dashboard
 
 ```http
 GET /dashboard
 ```
 
-### Internships
+## Internships
 
 ```http
 GET /internships
 ```
 
-### Companies
+## Companies
 
 ```http
 GET /companies
 ```
 
-### Subscriptions
+## Subscriptions
 
 ```http
 POST /subscriptions
 ```
 
-Additional subscription operations support:
+Subscription operations also support:
 
-* listing subscriptions
-* pausing
-* resuming
-* deleting
+* Listing subscriptions
+* Pausing subscriptions
+* Resuming subscriptions
+* Deleting subscriptions
 
-### Internship Search
+## Internship Search
 
 ```http
 GET /search-internships
@@ -668,49 +1116,60 @@ GET /search-internships
 
 # 🔐 Environment & Security
 
-Secrets are supplied through environment variables.
+Production secrets are supplied through environment variables.
 
-The repository does not require real credentials to run from source.
+The repository does not contain real credentials.
 
-Important production secrets include:
+Important environment variables include:
 
 ```text
 DATABASE_URL
 SERPAPI_API_KEY
 RESEND_API_KEY
 FROM_EMAIL
+SCHEDULER_ENABLED
+CORS_ORIGINS
 ```
 
-The scheduler is controlled using:
+The scheduler is enabled in production using:
 
 ```text
 SCHEDULER_ENABLED=true
 ```
 
+The local development environment can keep the scheduler disabled when manual testing is preferred.
+
 ---
 
 # 📊 Production Reliability
 
-The application includes several production-oriented safeguards:
+The system includes multiple production-oriented safeguards:
 
 * Async database access
+* PostgreSQL persistence
 * Database uniqueness constraints
 * Canonical URL normalization
 * Batched database queries
 * Search request limits
 * API retry handling
+* HTTP 429 handling
 * Search failure isolation
 * Subscription-group failure isolation
+* User-level notification deduplication
 * Notification idempotency
 * Concurrent notification protection
+* Atomic notification claiming
 * Email retry handling
+* Maximum retry limits
 * Zombie notification recovery
 * Maximum email concurrency
+* Maximum 15 jobs per email
 * 45-day database retention
 * Health monitoring
 * Environment-based configuration
 * CORS configuration
 * Automated regression testing
+* Production E2E verification
 
 ---
 
@@ -718,25 +1177,57 @@ The application includes several production-oriented safeguards:
 
 This project demonstrates practical experience with:
 
-* Backend API development
+### Backend Engineering
+
+* FastAPI
+* REST API development
 * Asynchronous Python
-* REST API design
-* PostgreSQL database design
-* SQLAlchemy ORM
+* SQLAlchemy
+* PostgreSQL
 * Database transactions
-* Database constraints and indexes
-* Background scheduling
+* Database constraints
+* Database indexing
+
+### Automation
+
+* APScheduler
+* Scheduled background processing
 * External API integration
-* AI/semantic similarity
-* ONNX model optimization
-* Notification systems
-* Idempotent processing
+* Search automation
+* Email automation
+
+### AI / ML Engineering
+
+* Semantic similarity
+* Sentence embeddings
+* all-MiniLM-L6-v2
+* ONNX model conversion
+* QInt8 quantization
+* ONNX Runtime
+* Mean pooling
+* L2 normalization
+* Cosine similarity
+
+### Reliability Engineering
+
+* Idempotency
 * Retry mechanisms
 * Concurrency control
-* Production debugging
+* Database locking
+* Duplicate prevention
+* Failure isolation
+* Retention cleanup
+* Zombie-process recovery
+
+### Software Engineering
+
 * Automated testing
+* Production debugging
+* Environment configuration
+* Git/GitHub
 * Deployment
-* Git/GitHub workflows
+* API validation
+* Security practices
 
 ---
 
@@ -744,15 +1235,16 @@ This project demonstrates practical experience with:
 
 Potential future improvements include:
 
-* More internship/job data sources
-* Advanced personalization
-* Improved ranking models
+* Additional internship data sources
+* Improved personalization
+* More advanced ranking models
 * User authentication
 * Analytics dashboards
 * More sophisticated search strategies
+* Additional notification channels
 * Distributed background processing when scale requires it
 
-These are intentionally kept outside the current production architecture.
+These improvements are intentionally outside the current production architecture.
 
 ---
 
@@ -764,20 +1256,25 @@ Electronics & Communication Engineering student building production-oriented sof
 
 ---
 
-## 📌 Project Status
+# 📌 Project Status
 
-**Production-ready student project**
+## Production-Oriented Student Project
 
 Current verification:
 
 ```text
-Automated regression tests: 193 passed
-Production database: Connected
-Production email delivery: Verified
-Scheduler: 12-hour interval
-AI relevance scoring: ONNX Runtime + QInt8
-Duplicate protection: Verified
-Notification idempotency: Verified
-Email retry handling: Verified
-45-day retention: Verified
+Automated regression tests     : 193 passed
+Production database            : Connected
+Production email delivery      : Verified
+Scheduler                      : 12-hour interval
+AI relevance scoring           : ONNX Runtime + QInt8
+Duplicate protection           : Verified
+7-day notification protection  : Verified
+Notification idempotency       : Verified
+Email retry handling           : Verified
+Concurrency protection         : Verified
+45-day retention               : Verified
+Production E2E                  : Verified
 ```
+
+The application is deployed and the core internship discovery → filtering → relevance → notification → email workflow has been verified end-to-end.
