@@ -2096,15 +2096,42 @@ async def process_all_active_subscriptions() -> Dict[str, Any]:
         if not group:
             continue
 
-        stats = await process_subscription(
-            subscription=group[0],
-            subscription_group=group,
-        )
+        try:
 
-        for key in totals:
+            stats = await process_subscription(
+                subscription=group[0],
+                subscription_group=group,
+            )
 
-            if key in stats:
-                totals[key] += stats[key]
+            for key in totals:
+
+                if key in stats:
+                    totals[key] += stats[key]
+
+        except asyncio.CancelledError:
+
+            raise
+
+        except Exception as error:
+
+            logger.exception(
+                "❌ Subscription group failed. "
+                "Continuing with remaining groups. "
+                "Company=%s | Domain=%s | Error=%s",
+                getattr(
+                    group[0],
+                    "company",
+                    None,
+                ),
+                getattr(
+                    group[0],
+                    "domain",
+                    None,
+                ),
+                error,
+            )
+
+        continue
 
     # ========================================================
     # FINAL PIPELINE STATS
