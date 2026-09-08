@@ -224,27 +224,22 @@ def start_scheduler():
 
     scheduler.add_job(
 
-        check_for_new_internships,
+    check_for_new_internships,
 
-        trigger="interval",
+    trigger="interval",
 
-        minutes=CHECK_INTERVAL_MINUTES,
+    minutes=CHECK_INTERVAL_MINUTES,
 
-        id="internship_checker",
+    id="internship_checker",
 
-        replace_existing=True,
+    replace_existing=True,
 
-        # Never allow overlapping cycles.
-        max_instances=1,
+    max_instances=1,
 
-        # If scheduler misses a run,
-        # combine missed executions.
-        coalesce=True,
+    coalesce=True,
 
-        # Run immediately after scheduler starts.
-       
-    )
-
+    next_run_time=datetime.now(timezone.utc),
+)
     scheduler.start()
 
     logger.info("")
