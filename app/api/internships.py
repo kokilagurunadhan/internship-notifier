@@ -54,6 +54,12 @@ async def get_internships(
 # ============================================================
 
 @router.get("/dashboard")
+
+# ============================================================
+# PUBLIC DASHBOARD
+# ============================================================
+
+@router.get("/dashboard")
 async def get_dashboard(
     db: AsyncSession = Depends(get_db),
 ):
@@ -75,7 +81,6 @@ async def get_dashboard(
     # ACTIVE SUBSCRIBERS
     # --------------------------------------------------------
 
-    # Your current model uses Subscription.user_email + is_active.
     result = await db.execute(
         select(
             func.count(
@@ -98,9 +103,7 @@ async def get_dashboard(
 
     result = await db.execute(
         select(
-            func.count(
-                Notification.id
-            )
+            func.count(Notification.id)
         )
         .where(
             Notification.status == "SENT"
@@ -112,15 +115,25 @@ async def get_dashboard(
 
     # --------------------------------------------------------
     # RECENT RELEVANT INTERNSHIPS
+    #
+    # IMPORTANT:
+    # Relevance is USER-SPECIFIC.
+    # Therefore use Notification.relevance_score
+    # instead of Internship.relevance_score.
     # --------------------------------------------------------
 
     result = await db.execute(
         select(
-            Internship
+            Internship,
+            Notification.relevance_score
+        )
+        .join(
+            Notification,
+            Notification.internship_id == Internship.id
         )
         .where(
             Internship.passed_filter.is_(True),
-            Internship.relevance_score.isnot(None),
+            Notification.relevance_score.isnot(None),
         )
         .order_by(
             Internship.id.desc()
@@ -128,12 +141,12 @@ async def get_dashboard(
         .limit(50)
     )
 
-    internships = result.scalars().all()
+    rows = result.all()
 
 
     jobs = []
 
-    for job in internships:
+    for job, relevance_score in rows:
 
         jobs.append({
 
@@ -153,8 +166,9 @@ async def get_dashboard(
 
             "via": job.via,
 
+            # Use the actual user-specific relevance score
             "relevance_score":
-                job.relevance_score,
+                float(relevance_score),
 
             "email_sent":
                 job.email_sent,
@@ -177,6 +191,7 @@ async def get_dashboard(
             jobs,
 
     }
+
 
 
 # ============================================================
