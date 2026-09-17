@@ -308,10 +308,18 @@ async function loadAnalytics() {
 
     try {
 
-        const subscriptionResponse =
-            await fetch(
-                `${API_URL}/subscriptions`
-            );
+        const userEmail =
+    localStorage.getItem("user_email");
+
+if (!userEmail) {
+    activeSubscribers.textContent = "0";
+    return;
+}
+
+const subscriptionResponse =
+    await fetch(
+        `${API_URL}/subscriptions?user_email=${encodeURIComponent(userEmail)}`
+    );
 
         if (subscriptionResponse.ok) {
 
@@ -347,10 +355,18 @@ async function loadAnalytics() {
 
         try {
 
-            const notificationResponse =
-                await fetch(
-                    `${API_URL}/notifications`
-                );
+            const userEmail =
+    localStorage.getItem("user_email");
+
+if (!userEmail) {
+    notificationsSent.textContent = "0";
+    return;
+}
+
+const notificationResponse =
+    await fetch(
+        `${API_URL}/notifications?user_email=${encodeURIComponent(userEmail)}`
+    );
 
             if (notificationResponse.ok) {
 
@@ -404,19 +420,31 @@ async function loadInternships() {
     try {
 
         const userEmail =
-            localStorage.getItem(
-                "user_email"
-            );
+    localStorage.getItem(
+        "user_email"
+    );
 
-        const internshipsUrl =
-            userEmail
-                ? `${API_URL}/internships?user_email=${encodeURIComponent(userEmail)}`
-                : `${API_URL}/internships`;
+if (!userEmail) {
 
-        const response =
-            await fetch(
-                internshipsUrl
-            );
+    totalJobs.textContent =
+        "0";
+
+    hideLoading();
+
+    emptyState.classList.remove(
+        "hidden"
+    );
+
+    return;
+}
+
+const internshipsUrl =
+    `${API_URL}/internships?user_email=${encodeURIComponent(userEmail)}`;
+
+const response =
+    await fetch(
+        internshipsUrl
+    );
 
         if (!response.ok) {
 

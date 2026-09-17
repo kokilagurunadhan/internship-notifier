@@ -166,19 +166,23 @@ async def create_subscription(
     response_model=List[SubscriptionResponse]
 )
 async def get_subscriptions(
-
+    user_email: str | None = None,
     db: AsyncSession = Depends(get_db)
-
 ):
+    if not user_email:
+        return []
+
+    user_email = user_email.strip().lower()
 
     result = await db.execute(
-
-    select(Subscription)
-    .order_by(
-        Subscription.created_at.desc()
+        select(Subscription)
+        .where(
+            Subscription.user_email == user_email
+        )
+        .order_by(
+            Subscription.created_at.desc()
+        )
     )
-
-)
 
     subscriptions = result.scalars().all()
 

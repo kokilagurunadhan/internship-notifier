@@ -47,7 +47,20 @@ async def get_internships(
 ):
 
     # --------------------------------------------------------
-    # BASE QUERY
+    # USER EMAIL IS REQUIRED
+    #
+    # The dashboard must never expose the global internship
+    # catalogue.
+    # --------------------------------------------------------
+
+    if not user_email:
+        return []
+
+    user_email = user_email.strip().lower()
+
+    # --------------------------------------------------------
+    # ONLY INTERNSHIPS BELONGING TO THIS USER'S
+    # NOTIFICATION RECORDS
     # --------------------------------------------------------
 
     query = (
@@ -55,14 +68,12 @@ async def get_internships(
             Internship,
             Notification.relevance_score,
         )
-        .outerjoin(
+        .join(
             Notification,
-            (
-                Notification.internship_id == Internship.id
-            )
-            & (
-                Notification.user_email == user_email
-            ),
+            Notification.internship_id == Internship.id,
+        )
+        .where(
+            Notification.user_email == user_email,
         )
         .order_by(
             Internship.id.desc()
@@ -74,7 +85,6 @@ async def get_internships(
     # --------------------------------------------------------
 
     if company:
-
         query = query.where(
             Internship.company == company
         )
@@ -84,32 +94,24 @@ async def get_internships(
     # --------------------------------------------------------
 
     if location:
-
         query = query.where(
             Internship.location == location
         )
 
     # --------------------------------------------------------
     # USER-SPECIFIC DISMISSAL FILTER
-    #
-    # Only apply this when a user email is supplied.
-    #
-    # The internship remains in the database.
-    # It is simply hidden from this user's dashboard.
     # --------------------------------------------------------
 
-    if user_email:
+    dismissed_exists = select(
+        InternshipDismissal.id
+    ).where(
+        InternshipDismissal.user_email == user_email,
+        InternshipDismissal.internship_id == Internship.id,
+    ).exists()
 
-        dismissed_exists = select(
-            InternshipDismissal.id
-        ).where(
-            InternshipDismissal.user_email == user_email,
-            InternshipDismissal.internship_id == Internship.id,
-        ).exists()
-
-        query = query.where(
-            ~dismissed_exists
-        )
+    query = query.where(
+        ~dismissed_exists
+    )
 
     # --------------------------------------------------------
     # EXECUTE
@@ -127,30 +129,48 @@ async def get_internships(
 
     for internship, relevance_score in rows:
 
-        data = {
+        internships.append({
+
             "id": internship.id,
-            "company": internship.company,
-            "title": internship.title,
-            "location": internship.location,
-            "url": internship.url,
-            "description": internship.description,
-            "source": internship.source,
-            "via": internship.via,
-            "relevance_score": (
+
+            "company":
+                internship.company,
+
+            "title":
+                internship.title,
+
+            "location":
+                internship.location,
+
+            "url":
+                internship.url,
+
+            "description":
+                internship.description,
+
+            "source":
+                internship.source,
+
+            "via":
+                internship.via,
+
+            # IMPORTANT:
+            # Always use the USER-SPECIFIC score.
+            "relevance_score":
                 float(relevance_score)
                 if relevance_score is not None
-                else (
-                    float(internship.relevance_score)
-                    if internship.relevance_score is not None
-                    else None
-                )
-            ),
-            "email_sent": internship.email_sent,
-            "created_at": internship.created_at,
-            "last_seen_at": internship.last_seen_at,
-        }
+                else None,
 
-        internships.append(data)
+            "email_sent":
+                internship.email_sent,
+
+            "created_at":
+                internship.created_at,
+
+            "last_seen_at":
+                internship.last_seen_at,
+
+        })
 
     return internships
 # ============================================================
@@ -224,11 +244,7 @@ async def dismiss_internship(
 
 @router.get("/dashboard")
 
-# ============================================================
-# PUBLIC DASHBOARD
-# ============================================================
 
-@router.get("/dashboard")
 async def get_dashboard(
     db: AsyncSession = Depends(get_db),
 ):

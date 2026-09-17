@@ -35,3 +35,4 @@ htmlcov/
 Thumbs.db
 
 tests.zip.zip
+conftest.py
