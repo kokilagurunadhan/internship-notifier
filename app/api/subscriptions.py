@@ -30,6 +30,9 @@ from app.services.email_service import (
 from app.services.subscription_service import (
     get_subscriptions_by_company
 )
+from app.services.internship_service import (
+    create_notifications_for_subscription
+)
 
 
 # ============================================================
@@ -122,6 +125,16 @@ async def create_subscription(
     try:
         await db.commit()
         await db.refresh(new_subscription)
+        # --------------------------------------------------------
+# CREATE USER-SPECIFIC NOTIFICATIONS FOR EXISTING JOBS
+# --------------------------------------------------------
+
+        await create_notifications_for_subscription(
+    db=db,
+    subscription=new_subscription,
+)
+
+        await db.commit()
 
     except IntegrityError:
         await db.rollback()

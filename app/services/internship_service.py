@@ -781,7 +781,140 @@ async def create_pending_notification(
 
         return False
 
+# ============================================================
+# CREATE NOTIFICATIONS FOR NEW SUBSCRIPTION
+# ============================================================
 
+async def create_notifications_for_subscription(
+    db: AsyncSession,
+    subscription: Subscription,
+) -> int:
+    """
+    Evaluate existing recent internships for a newly created
+    subscription and create user-specific PENDING notifications.
+
+    The global Internship record is reused.
+    Relevance is calculated separately for this user's domain.
+    """
+
+    if not subscription:
+        return 0
+
+    if not subscription.id:
+        return 0
+
+    if not subscription.is_active:
+        return 0
+
+    user_email = (
+        subscription.user_email
+        or ""
+    ).strip().lower()
+
+    if not user_email:
+        return 0
+
+    company = (
+        subscription.company
+        or ""
+    ).strip()
+
+    if not company:
+        return 0
+
+    user_domain = (
+        subscription.domain
+        or ""
+    ).strip()
+
+    # --------------------------------------------------------
+    # FIND EXISTING RECENT INTERNSHIPS
+    #
+    # Do NOT filter by passed_filter here.
+    #
+    # passed_filter may represent the global score, while
+    # relevance for this user is calculated below.
+    # --------------------------------------------------------
+
+    now = _utc_now()
+
+    cutoff = (
+        now
+        - timedelta(
+            days=NOTIFICATION_WINDOW_DAYS
+        )
+    )
+
+    result = await db.execute(
+        select(Internship)
+        .where(
+            Internship.company == company,
+            Internship.created_at >= cutoff,
+        )
+        .order_by(
+            Internship.id.desc()
+        )
+    )
+
+    internships = result.scalars().all()
+
+    created_count = 0
+
+    # --------------------------------------------------------
+    # CALCULATE USER-SPECIFIC RELEVANCE
+    # --------------------------------------------------------
+
+    from app.services.relevance_engine import (
+        calculate_relevance_score
+    )
+
+    for internship in internships:
+
+        result = calculate_relevance_score(
+            job_title=internship.title,
+            job_description=(
+                internship.description or ""
+            ),
+            user_domain=user_domain or None,
+        )
+
+        final_score = float(
+            result.get(
+                "final_score",
+                0
+            )
+            or 0
+        )
+
+        logger.info(
+            "New subscription relevance: "
+            "email=%s internship=%s score=%.2f",
+            user_email,
+            internship.id,
+            final_score,
+        )
+
+        created = await create_pending_notification(
+            db=db,
+            subscription=subscription,
+            internship=internship,
+            relevance_score=final_score,
+        )
+
+        if created:
+            created_count += 1
+
+    logger.info(
+        "🆕 New subscription processed: "
+        "email=%s company=%s internships_checked=%d "
+        "notifications_created=%d",
+        user_email,
+        company,
+        len(internships),
+        created_count,
+    )
+
+    return created_count
 # ============================================================
 # CREATE PENDING NOTIFICATIONS FOR JOB
 # ============================================================
