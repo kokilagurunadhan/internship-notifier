@@ -62,8 +62,9 @@ def search_jobs(
     response = requests.get(
         "https://serpapi.com/search.json",
         params=params,
-        timeout=30
+        timeout=120
     )
+    
 
     response.raise_for_status()
 

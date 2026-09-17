@@ -27,7 +27,7 @@ def test_real_serpapi_raw():
     response = requests.get(
         "https://serpapi.com/search.json",
         params=params,
-        timeout=20,
+        timeout=120,
     )
 
     print("\nSTATUS:", response.status_code)
@@ -52,7 +52,7 @@ def test_serpapi_extract_jobs():
     response = requests.get(
         "https://serpapi.com/search.json",
         params=params,
-        timeout=20,
+        timeout=120,
     )
 
     assert response.status_code == 200
