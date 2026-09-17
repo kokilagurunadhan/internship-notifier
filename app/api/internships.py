@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from app.schemas.internship import (
     InternshipCreate,
     InternshipResponse,
+    InternshipDismissRequest,
 )
 
 from app.services.internship_service import (
@@ -27,6 +28,7 @@ from app.database.database import get_db
 from app.models.internship import Internship
 from app.models.subscription import Subscription
 from app.models.notification import Notification
+from app.models.internship_dismissal import InternshipDismissal
 
 
 router = APIRouter()
@@ -40,15 +42,182 @@ router = APIRouter()
 async def get_internships(
     company: str | None = None,
     location: str | None = None,
+    user_email: str | None = None,
+    db: AsyncSession = Depends(get_db),
 ):
 
-    internships = await get_all_internships(
-        company=company,
-        location=location,
+    # --------------------------------------------------------
+    # BASE QUERY
+    # --------------------------------------------------------
+
+    query = (
+        select(
+            Internship,
+            Notification.relevance_score,
+        )
+        .outerjoin(
+            Notification,
+            (
+                Notification.internship_id == Internship.id
+            )
+            & (
+                Notification.user_email == user_email
+            ),
+        )
+        .order_by(
+            Internship.id.desc()
+        )
     )
 
-    return internships
+    # --------------------------------------------------------
+    # COMPANY FILTER
+    # --------------------------------------------------------
 
+    if company:
+
+        query = query.where(
+            Internship.company == company
+        )
+
+    # --------------------------------------------------------
+    # LOCATION FILTER
+    # --------------------------------------------------------
+
+    if location:
+
+        query = query.where(
+            Internship.location == location
+        )
+
+    # --------------------------------------------------------
+    # USER-SPECIFIC DISMISSAL FILTER
+    #
+    # Only apply this when a user email is supplied.
+    #
+    # The internship remains in the database.
+    # It is simply hidden from this user's dashboard.
+    # --------------------------------------------------------
+
+    if user_email:
+
+        dismissed_exists = select(
+            InternshipDismissal.id
+        ).where(
+            InternshipDismissal.user_email == user_email,
+            InternshipDismissal.internship_id == Internship.id,
+        ).exists()
+
+        query = query.where(
+            ~dismissed_exists
+        )
+
+    # --------------------------------------------------------
+    # EXECUTE
+    # --------------------------------------------------------
+
+    result = await db.execute(query)
+
+    rows = result.all()
+
+    # --------------------------------------------------------
+    # BUILD RESPONSE
+    # --------------------------------------------------------
+
+    internships = []
+
+    for internship, relevance_score in rows:
+
+        data = {
+            "id": internship.id,
+            "company": internship.company,
+            "title": internship.title,
+            "location": internship.location,
+            "url": internship.url,
+            "description": internship.description,
+            "source": internship.source,
+            "via": internship.via,
+            "relevance_score": (
+                float(relevance_score)
+                if relevance_score is not None
+                else (
+                    float(internship.relevance_score)
+                    if internship.relevance_score is not None
+                    else None
+                )
+            ),
+            "email_sent": internship.email_sent,
+            "created_at": internship.created_at,
+            "last_seen_at": internship.last_seen_at,
+        }
+
+        internships.append(data)
+
+    return internships
+# ============================================================
+# DISMISS INTERNSHIP FOR USER
+# ============================================================
+
+@router.post("/internships/{internship_id}/dismiss")
+async def dismiss_internship(
+    internship_id: int,
+    request: InternshipDismissRequest,
+    db: AsyncSession = Depends(get_db),
+):
+
+    # --------------------------------------------------------
+    # VERIFY INTERNSHIP EXISTS
+    # --------------------------------------------------------
+
+    result = await db.execute(
+        select(Internship).where(
+            Internship.id == internship_id
+        )
+    )
+
+    internship = result.scalar_one_or_none()
+
+    if internship is None:
+        return {
+            "success": False,
+            "message": "Internship not found",
+        }
+
+
+    # --------------------------------------------------------
+    # CHECK IF ALREADY DISMISSED
+    # --------------------------------------------------------
+
+    result = await db.execute(
+        select(InternshipDismissal).where(
+            InternshipDismissal.user_email == request.user_email,
+            InternshipDismissal.internship_id == internship_id,
+        )
+    )
+
+    existing = result.scalar_one_or_none()
+
+
+    # --------------------------------------------------------
+    # CREATE DISMISSAL
+    # --------------------------------------------------------
+
+    if existing is None:
+
+        dismissal = InternshipDismissal(
+            user_email=request.user_email,
+            internship_id=internship_id,
+        )
+
+        db.add(dismissal)
+
+        await db.commit()
+
+
+    return {
+        "success": True,
+        "message": "Internship dismissed",
+        "internship_id": internship_id,
+    }
 # ============================================================
 # PUBLIC DASHBOARD
 # ============================================================

@@ -403,9 +403,19 @@ async function loadInternships() {
 
     try {
 
+        const userEmail =
+            localStorage.getItem(
+                "user_email"
+            );
+
+        const internshipsUrl =
+            userEmail
+                ? `${API_URL}/internships?user_email=${encodeURIComponent(userEmail)}`
+                : `${API_URL}/internships`;
+
         const response =
             await fetch(
-                `${API_URL}/internships`
+                internshipsUrl
             );
 
         if (!response.ok) {
@@ -628,40 +638,53 @@ function displayInternships(internships) {
 
                 <div class="internship-card-bottom">
 
-                    <span class="source">
-                        🌐 via
-                        ${escapeHtml(source)}
-                    </span>
+    <span class="source">
+        🌐 via
+        ${escapeHtml(source)}
+    </span>
 
 
-                    ${
-                        applyUrl !== "#"
+    <div class="internship-actions">
 
-                        ?
+        ${
+            applyUrl !== "#"
 
-                        `
-                        <a
-                            href="${escapeHtml(applyUrl)}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="apply-button"
-                        >
-                            🚀 Apply Now
-                        </a>
-                        `
+            ?
 
-                        :
+            `
+            <a
+                href="${escapeHtml(applyUrl)}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="apply-button"
+            >
+                🚀 Apply Now
+            </a>
+            `
 
-                        `
-                        <span
-                            class="apply-button disabled"
-                        >
-                            🔗 Link Unavailable
-                        </span>
-                        `
-                    }
+            :
 
-                </div>
+            `
+            <span
+                class="apply-button disabled"
+            >
+                🔗 Link Unavailable
+            </span>
+            `
+        }
+
+
+        <button
+            type="button"
+            class="remove-button"
+            onclick="removeInternship(${internship.id}, this)"
+        >
+            🗑️ Remove
+        </button>
+
+    </div>
+
+
 
             `;
 
@@ -673,7 +696,87 @@ function displayInternships(internships) {
         }
     );
 }
+// ============================================================
+// REMOVE INTERNSHIP
+// ============================================================
 
+async function removeInternship(
+    internshipId,
+    button
+) {
+
+    const userEmail =
+        localStorage.getItem(
+            "user_email"
+        );
+
+    if (
+        !userEmail ||
+        !internshipId
+    ) {
+        return;
+    }
+
+
+    button.disabled =
+        true;
+
+    button.textContent =
+        "⏳ Removing...";
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/internships/${internshipId}/dismiss`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        user_email: userEmail
+                    })
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Server returned ${response.status}`
+            );
+        }
+
+
+        // Reload dashboard so the
+        // dismissed internship disappears.
+
+        await loadInternships();
+
+
+    } catch (error) {
+
+        console.error(
+            "Remove internship error:",
+            error
+        );
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "🗑️ Remove";
+
+        alert(
+            "Unable to remove this internship. Please try again."
+        );
+    }
+}
 
 // ============================================================
 // REFRESH BUTTON

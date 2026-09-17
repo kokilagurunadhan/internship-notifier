@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
-
+from pydantic import EmailStr
 
 class InternshipCreate(BaseModel):
     company: str = Field(..., min_length=1, max_length=200)
@@ -20,3 +20,5 @@ class InternshipResponse(BaseModel):
     source: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+class InternshipDismissRequest(BaseModel):
+    user_email: EmailStr

@@ -640,13 +640,19 @@ subscriptionForm.addEventListener(
 
 
             // ------------------------------------------------
-            // SUCCESS
-            // ------------------------------------------------
+// SUCCESS
+// ------------------------------------------------
 
-            showMessage(
-                "✅ Automated radar activated successfully!",
-                "success"
-            );
+localStorage.setItem(
+    "user_email",
+    email
+);
+            
+
+showMessage(
+    "Automated radar activated successfully!",
+    "success"
+);
 
 
             // ------------------------------------------------
