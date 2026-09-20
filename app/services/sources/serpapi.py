@@ -17,38 +17,15 @@ API_KEY = os.getenv("SERPAPI_API_KEY")
 # SEARCH GOOGLE JOBS THROUGH SERPAPI
 # ============================================================
 
-def search_jobs(
-    company,
-    domain=None,
-    location="India"
-):
-
+def search_jobs(company, domain=None, location="India"):
     if not API_KEY:
-
-        raise ValueError(
-            "SERPAPI_API_KEY is missing from .env"
-        )
-
-
-    # --------------------------------------------------------
-    # BUILD QUERY
-    # --------------------------------------------------------
+        raise ValueError("SERPAPI_API_KEY is missing from .env")
 
     query = f"{company} internship"
-
     if domain:
-
         query += f" {domain}"
 
-
-    print(
-        f"🔎 SerpAPI search: {query}"
-    )
-
-
-    # --------------------------------------------------------
-    # SERPAPI REQUEST
-    # --------------------------------------------------------
+    print(f"🔎 SerpAPI search: {query}")
 
     params = {
         "engine": "google_jobs",
@@ -58,56 +35,19 @@ def search_jobs(
         "api_key": API_KEY
     }
 
-
     response = requests.get(
         "https://serpapi.com/search.json",
         params=params,
-        timeout=120
+        timeout=30
     )
-    
 
     response.raise_for_status()
 
-
-    # --------------------------------------------------------
-    # GET RAW JOBS
-    # --------------------------------------------------------
-
     data = response.json()
+    jobs = data.get("jobs_results", [])
 
-    jobs = data.get(
-        "jobs_results",
-        []
-    )
-
-
-    print(
-        f"   🎯 SerpAPI returned "
-        f"{len(jobs)} jobs"
-    )
-
-
-    # --------------------------------------------------------
-    # IMPORTANT
-    #
-    # DO NOT:
-    #
-    # - check duplicate URLs here
-    # - run internship filter here
-    # - verify company here
-    # - calculate relevance here
-    # - run Semantic AI here
-    # - save jobs here
-    #
-    # This function is ONLY responsible for
-    # retrieving raw jobs from SerpAPI.
-    #
-    # The locked pipeline handles everything else.
-    # --------------------------------------------------------
-
+    print(f"   🎯 SerpAPI returned {len(jobs)} jobs")
     return jobs
-
-
 # ============================================================
 # DIRECT TEST
 # ============================================================
