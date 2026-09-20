@@ -1,7 +1,6 @@
 from typing import List
 import asyncio
 import os
-import secrets
 
 from fastapi import (
     APIRouter,
@@ -44,46 +43,6 @@ router = APIRouter(
     prefix="/subscriptions",
     tags=["Subscriptions"]
 )
-
-# ============================================================
-# TEMPORARY PRODUCTION SUBSCRIPTION INSPECTION
-# REMOVE AFTER USE
-# ============================================================
-
-@router.get("/debug/list-active")
-async def debug_list_active_subscriptions(
-    token: str,
-    db: AsyncSession = Depends(get_db)
-):
-    debug_token = os.getenv("DEBUG_SUBSCRIPTION_TOKEN")
-
-    if not debug_token or not secrets.compare_digest(
-        token,
-        debug_token
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden"
-        )
-
-    result = await db.execute(
-        select(Subscription)
-        .where(Subscription.is_active == True)
-        .order_by(Subscription.id)
-    )
-
-    subscriptions = result.scalars().all()
-
-    return [
-        {
-            "id": subscription.id,
-            "email": subscription.user_email,
-            "company": subscription.company,
-            "domain": subscription.domain,
-            "status": subscription.status,
-        }
-        for subscription in subscriptions
-    ]
 # ============================================================
 # CREATE SUBSCRIPTION
 # ============================================================
