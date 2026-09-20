@@ -186,10 +186,21 @@ async function loadSubscriptions() {
         `;
 
 
-        const response =
-            await fetch(
-                `${API_URL}/subscriptions`
-            );
+        const userEmail =
+    localStorage.getItem("user_email");
+
+if (!userEmail) {
+
+    displaySubscriptions([]);
+
+    return;
+
+}
+
+const response =
+    await fetch(
+        `${API_URL}/subscriptions?user_email=${encodeURIComponent(userEmail)}`
+    );
 
 
         if (!response.ok) {
