@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI,Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -10,6 +10,7 @@ from app.database.database import (
     Base,
     engine
 )
+from app.services.pipeline_processor import process_all_active_subscriptions
 logger = logging.getLogger(__name__)
 from sqlalchemy import text
 # ============================================================
@@ -140,7 +141,43 @@ async def health_check():
             "status": "unhealthy",
             "database": "disconnected",
         }
+# ============================================================
+# EXTERNAL SCHEDULER TRIGGER
+# ============================================================
 
+@app.post("/internal/run-internship-pipeline")
+async def run_internship_pipeline(
+    x_scheduler_token: str | None = Header(default=None),
+):
+    expected_token = os.getenv(
+        "SCHEDULER_TRIGGER_TOKEN"
+    )
+
+    if not expected_token:
+        logger.error(
+            "SCHEDULER_TRIGGER_TOKEN is not configured."
+        )
+
+        return {
+            "status": "error",
+            "message": "Scheduler trigger is not configured.",
+        }
+
+    if x_scheduler_token != expected_token:
+        return {
+            "status": "unauthorized",
+        }
+
+    logger.info(
+        "🌐 External scheduler triggered internship pipeline."
+    )
+
+    result = await process_all_active_subscriptions()
+
+    return {
+        "status": "completed",
+        "pipeline": result,
+    }
 # ============================================================
 # CORS
 # ============================================================
