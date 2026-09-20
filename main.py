@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import logging
 
@@ -22,7 +23,9 @@ from app.models.internship import Internship
 from app.models.notification import Notification
 from app.models.historical_job import HistoricalJob
 
-
+from app.services.notification_dispatcher import (
+    run_notification_dispatcher
+)
 # ============================================================
 # API ROUTERS
 # ============================================================
@@ -78,6 +81,10 @@ async def lifespan(app: FastAPI):
 
     start_scheduler()
 
+    dispatcher_task = asyncio.create_task(
+        run_notification_dispatcher()
+    )
+
     logger.info("🚀 Internship Notifier started.")
 
     try:
@@ -90,12 +97,20 @@ async def lifespan(app: FastAPI):
         # SHUTDOWN
         # ----------------------------------------------------
 
+        dispatcher_task.cancel()
+
+        try:
+            await dispatcher_task
+        except asyncio.CancelledError:
+            logger.info(
+                "🛑 Notification dispatcher stopped."
+            )
+
         stop_scheduler()
 
         await engine.dispose()
 
         logger.info("🛑 Internship Notifier stopped.")
-
 
 # ============================================================
 # FASTAPI APP
