@@ -1,5 +1,5 @@
 # ============================================================
-# REAL RESEND EMAIL TEST
+#  REAL GMAIL SMTP EMAIL TEST
 # File: app/services/test_real_email.py
 # ============================================================
 
@@ -47,7 +47,7 @@ TEST_INTERNSHIP = {
 def main():
 
     print("=" * 65)
-    print("REAL RESEND EMAIL TEST")
+    print("REAL GMAIL SMTP EMAIL TEST")
     print("=" * 65)
 
     print()
@@ -78,7 +78,7 @@ def main():
         raise SystemExit(1)
 
     print(
-        "✅ Resend accepted the email"
+        "✅ Gmail SMTP accepted the email"
     )
 
     print()

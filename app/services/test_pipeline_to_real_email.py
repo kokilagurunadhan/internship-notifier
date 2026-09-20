@@ -145,7 +145,7 @@ async def main():
     print("=" * 70)
 
     print(
-        "PIPELINE → REAL RESEND EMAIL E2E TEST"
+        "PIPELINE → REAL GMAIL SMTP EMAIL E2E TEST"
     )
 
     print("=" * 70)
@@ -333,7 +333,7 @@ async def main():
         print("=" * 70)
 
         print(
-            "🎉 PIPELINE → REAL RESEND EMAIL "
+            "🎉 PIPELINE → REAL GMAIL SMTP EMAIL "
             "E2E TEST PASSED"
         )
 

@@ -857,7 +857,7 @@ def _generate_idempotency_key(
 ) -> str:
     """
     Same user + same notification IDs
-    = same deterministic Resend idempotency key.
+= same deterministic email idempotency key.
     """
 
     safe_email = (
@@ -1614,7 +1614,7 @@ async def dispatch_pending_notifications_batch() -> int:
            ↓
         MAX 15
            ↓
-        RESEND
+        GMAIL SMTP
            ↓
         SENT
     """

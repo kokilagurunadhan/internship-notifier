@@ -6,10 +6,10 @@
 import os
 import html
 import logging
+import smtplib
 
 from datetime import datetime, timezone
-
-import resend
+from email.message import EmailMessage
 
 from dotenv import load_dotenv
 
@@ -36,18 +36,42 @@ MAX_INTERNSHIPS_PER_EMAIL = 15
 
 
 # ============================================================
-# API KEY
+# SMTP CONFIGURATION
 # ============================================================
 
-def _get_api_key() -> str:
+def _get_smtp_config():
 
-    if not resend.api_key:
-
-        resend.api_key = os.getenv(
-            "RESEND_API_KEY"
+    smtp_email = os.getenv("SMTP_EMAIL")
+    smtp_app_password = os.getenv("SMTP_APP_PASSWORD")
+    smtp_host = os.getenv(
+        "SMTP_HOST",
+        "smtp.gmail.com"
+    )
+    smtp_port = int(
+        os.getenv(
+            "SMTP_PORT",
+            "465"
         )
+    )
 
-    return resend.api_key
+    if not smtp_email:
+        logger.error(
+            "❌ SMTP_EMAIL environment variable is missing."
+        )
+        return None
+
+    if not smtp_app_password:
+        logger.error(
+            "❌ SMTP_APP_PASSWORD environment variable is missing."
+        )
+        return None
+
+    return (
+        smtp_email,
+        smtp_app_password.replace(" ", ""),
+        smtp_host,
+        smtp_port
+    )
 
 
 # ============================================================
@@ -57,7 +81,6 @@ def _get_api_key() -> str:
 def _escape(value) -> str:
 
     if value is None:
-
         return ""
 
     return html.escape(
@@ -107,7 +130,6 @@ def _created_sort_value(
     )
 
     if created_at is None:
-
         return float("-inf")
 
 
@@ -323,16 +345,22 @@ def send_internship_email(
 ):
 
     # ========================================================
-    # API KEY
+    # SMTP CONFIGURATION
     # ========================================================
 
-    if not _get_api_key():
+    smtp_config = _get_smtp_config()
 
-        logger.error(
-            "❌ RESEND_API_KEY is missing."
-        )
+    if not smtp_config:
 
         return None
+
+
+    (
+        smtp_email,
+        smtp_app_password,
+        smtp_host,
+        smtp_port
+    ) = smtp_config
 
 
     # ========================================================
@@ -376,16 +404,97 @@ def send_internship_email(
 
     from_email = os.getenv(
         "FROM_EMAIL"
+    ) or smtp_email
+
+
+    # ========================================================
+    # BUILD EMAIL
+    # ========================================================
+
+    message = EmailMessage()
+
+    message["From"] = from_email
+
+    message["To"] = recipient_email
+
+    message["Subject"] = (
+        f"New {safe_company} "
+        f"Internship Found!"
     )
 
-    if not from_email:
+    message.set_content(
+        "A new internship matching "
+        "your subscription has been found.\n\n"
+        f"Company: {company}\n"
+        f"Role: {title}\n"
+        f"Location: {location or 'Location not specified'}\n"
+        f"View Internship: {url}\n\n"
+        "Internship Notifier 🤖"
+    )
 
-        logger.error(
-            "❌ FROM_EMAIL environment variable "
-            "is not configured."
-        )
 
-        return None
+    message.add_alternative(
+        f"""
+        <html>
+
+        <body
+            style="
+                font-family:Arial,sans-serif;
+                line-height:1.6;
+            "
+        >
+
+            <h2>
+                🎉 New Internship Found!
+            </h2>
+
+            <p>
+                A new internship matching
+                your subscription has been found.
+            </p>
+
+            <hr>
+
+            <p>
+                <strong>Company:</strong>
+                {safe_company}
+            </p>
+
+            <p>
+                <strong>Role:</strong>
+                {safe_title}
+            </p>
+
+            <p>
+                <strong>Location:</strong>
+                {safe_location}
+            </p>
+
+            <br>
+
+            <p>
+
+                <a
+                    href="{safe_url}"
+                    target="_blank"
+                >
+                    👉 View Internship
+                </a>
+
+            </p>
+
+            <hr>
+
+            <p>
+                Internship Notifier 🤖
+            </p>
+
+        </body>
+
+        </html>
+        """,
+        subtype="html"
+    )
 
 
     # ========================================================
@@ -394,90 +503,28 @@ def send_internship_email(
 
     try:
 
-        response = resend.Emails.send(
+        with smtplib.SMTP_SSL(
+            smtp_host,
+            smtp_port,
+            timeout=30
+        ) as smtp:
 
-            {
+            smtp.login(
+                smtp_email,
+                smtp_app_password
+            )
 
-                "from": from_email,
-
-                "to": [
-                    recipient_email
-                ],
-
-                "subject": (
-                    f"New {safe_company} "
-                    f"Internship Found!"
-                ),
-
-                "html": f"""
-                <html>
-
-                <body
-                    style="
-                        font-family:Arial,sans-serif;
-                        line-height:1.6;
-                    "
-                >
-
-                    <h2>
-                        🎉 New Internship Found!
-                    </h2>
-
-                    <p>
-                        A new internship matching
-                        your subscription has been found.
-                    </p>
-
-                    <hr>
-
-                    <p>
-                        <strong>Company:</strong>
-                        {safe_company}
-                    </p>
-
-                    <p>
-                        <strong>Role:</strong>
-                        {safe_title}
-                    </p>
-
-                    <p>
-                        <strong>Location:</strong>
-                        {safe_location}
-                    </p>
-
-                    <br>
-
-                    <p>
-
-                        <a
-                            href="{safe_url}"
-                            target="_blank"
-                        >
-                            👉 View Internship
-                        </a>
-
-                    </p>
-
-                    <hr>
-
-                    <p>
-                        Internship Notifier 🤖
-                    </p>
-
-                </body>
-
-                </html>
-                """
-            }
-        )
+            smtp.send_message(
+                message
+            )
 
 
         logger.info(
-            "📧 Single internship email sent"
+            "📧 Single internship email sent via Gmail SMTP"
         )
 
 
-        return response
+        return True
 
 
     except Exception as error:
@@ -501,16 +548,22 @@ def send_notification_email(
 ):
 
     # ========================================================
-    # API KEY
+    # SMTP CONFIGURATION
     # ========================================================
 
-    if not _get_api_key():
+    smtp_config = _get_smtp_config()
 
-        logger.error(
-            "❌ RESEND_API_KEY is missing."
-        )
+    if not smtp_config:
 
         return None
+
+
+    (
+        smtp_email,
+        smtp_app_password,
+        smtp_host,
+        smtp_port
+    ) = smtp_config
 
 
     # ========================================================
@@ -528,6 +581,11 @@ def send_notification_email(
 
     # ========================================================
     # IDEMPOTENCY KEY
+    #
+    # Kept because the dispatcher passes it.
+    # Actual idempotency is handled by the
+    # notification database state.
+    #
     # ========================================================
 
     if not idempotency_key:
@@ -906,16 +964,35 @@ def send_notification_email(
 
     from_email = os.getenv(
         "FROM_EMAIL"
+    ) or smtp_email
+
+
+    # ========================================================
+    # BUILD EMAIL
+    # ========================================================
+
+    message = EmailMessage()
+
+    message["From"] = from_email
+
+    message["To"] = recipient_email
+
+    message["Subject"] = subject
+
+    message.set_content(
+        f"We found {total_count} "
+        f"internship opportunities matching "
+        f"your subscriptions.\n\n"
+        "Please open the HTML version of this "
+        "email to view the internship links.\n\n"
+        "— Internship Notifier"
     )
 
-    if not from_email:
 
-        logger.error(
-            "❌ FROM_EMAIL environment variable "
-            "is not configured."
-        )
-
-        return None
+    message.add_alternative(
+        email_html,
+        subtype="html"
+    )
 
 
     # ========================================================
@@ -925,41 +1002,34 @@ def send_notification_email(
     try:
 
         logger.info(
-            "🔐 Sending digest email"
+            "🔐 Sending digest email via Gmail SMTP | "
+            "Idempotency=%s",
+            idempotency_key
         )
 
 
-        response = resend.Emails.send(
+        with smtplib.SMTP_SSL(
+            smtp_host,
+            smtp_port,
+            timeout=30
+        ) as smtp:
 
-            {
+            smtp.login(
+                smtp_email,
+                smtp_app_password
+            )
 
-                "from": from_email,
-
-                "to": [
-                    recipient_email
-                ],
-
-                "subject": subject,
-
-                "html": email_html,
-
-            },
-
-            {
-
-                "idempotencyKey":
-                    idempotency_key
-
-            }
-        )
+            smtp.send_message(
+                message
+            )
 
 
         logger.info(
-            "✅ Digest email accepted by Resend"
+            "✅ Digest email sent via Gmail SMTP"
         )
 
 
-        return response
+        return True
 
 
     except Exception as error:

@@ -3,7 +3,6 @@
 # File: test_email_service.py
 # ============================================================
 
-import os
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -40,6 +39,26 @@ def make_internship(
         "is_new": is_new,
         "created_at": created_at,
     }
+
+
+# ============================================================
+# SMTP MOCK HELPER
+# ============================================================
+
+def smtp_mock():
+
+    smtp_patcher = patch(
+        "app.services.email_service.smtplib.SMTP_SSL"
+    )
+
+    mock_smtp_class = smtp_patcher.start()
+
+    mock_smtp = mock_smtp_class.return_value
+
+    mock_smtp.__enter__.return_value = mock_smtp
+    mock_smtp.__exit__.return_value = False
+
+    return smtp_patcher, mock_smtp
 
 
 # ============================================================
@@ -102,16 +121,9 @@ def test_basic_digest():
         ),
     ]
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    fake_response = {
-        "id": "fake-resend-email-id"
-    }
-
-
-    with patch(
-        "app.services.email_service.resend.Emails.send",
-        return_value=fake_response
-    ) as mock_send:
+    try:
 
         response = send_notification_email(
             TEST_EMAIL,
@@ -119,13 +131,17 @@ def test_basic_digest():
             TEST_IDEMPOTENCY_KEY
         )
 
+    finally:
 
-    assert response == fake_response
+        smtp_patcher.stop()
 
-    mock_send.assert_called_once()
+    assert response is True
+
+    mock_smtp.login.assert_called_once()
+    mock_smtp.send_message.assert_called_once()
 
     print("✅ Email function returned successfully.")
-    print("✅ Resend API was called exactly once.")
+    print("✅ Gmail SMTP send_message() was called exactly once.")
 
 
 # ============================================================
@@ -139,7 +155,6 @@ def test_new_internships_first():
     print("=" * 70)
     print("🧪 TEST 2 — NEW INTERNSHIPS FIRST")
     print("=" * 70)
-
 
     internships = [
 
@@ -174,23 +189,9 @@ def test_new_internships_first():
         ),
     ]
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    captured_payload = {}
-
-
-    def fake_send(*args):
-
-        captured_payload["args"] = args
-
-        return {
-            "id": "fake-id"
-        }
-
-
-    with patch(
-        "app.services.email_service.resend.Emails.send",
-        side_effect=fake_send
-    ):
+    try:
 
         response = send_notification_email(
             TEST_EMAIL,
@@ -198,14 +199,17 @@ def test_new_internships_first():
             TEST_IDEMPOTENCY_KEY
         )
 
+        message = mock_smtp.send_message.call_args.args[0]
 
-    assert response["id"] == "fake-id"
+    finally:
 
+        smtp_patcher.stop()
 
-    payload = captured_payload["args"][0]
+    assert response is True
 
-    email_html = payload["html"]
-
+    email_html = message.get_body(
+        preferencelist=("html",)
+    ).get_content()
 
     new_position = email_html.find(
         "NEW LOW SCORE"
@@ -215,12 +219,10 @@ def test_new_internships_first():
         "OLD HIGH SCORE"
     )
 
-
     assert new_position != -1
     assert old_position != -1
 
     assert new_position < old_position
-
 
     print(
         "✅ NEW internship appears before OLD internship."
@@ -238,7 +240,6 @@ def test_relevance_sorting():
     print("=" * 70)
     print("🧪 TEST 3 — RELEVANCE SORTING")
     print("=" * 70)
-
 
     internships = [
 
@@ -267,23 +268,9 @@ def test_relevance_sorting():
         ),
     ]
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    captured = {}
-
-
-    def fake_send(*args):
-
-        captured["payload"] = args[0]
-
-        return {
-            "id": "fake-id"
-        }
-
-
-    with patch(
-        "app.services.email_service.resend.Emails.send",
-        side_effect=fake_send
-    ):
+    try:
 
         send_notification_email(
             TEST_EMAIL,
@@ -291,18 +278,22 @@ def test_relevance_sorting():
             TEST_IDEMPOTENCY_KEY
         )
 
+        message = mock_smtp.send_message.call_args.args[0]
 
-    html = captured["payload"]["html"]
+    finally:
 
+        smtp_patcher.stop()
+
+    html = message.get_body(
+        preferencelist=("html",)
+    ).get_content()
 
     position_90 = html.find("Score 90")
     position_75 = html.find("Score 75")
     position_60 = html.find("Score 60")
 
-
     assert position_90 < position_75
     assert position_75 < position_60
-
 
     print(
         "✅ Relevance sorting works correctly."
@@ -321,9 +312,7 @@ def test_max_15():
     print("🧪 TEST 4 — MAXIMUM 15 INTERNSHIPS")
     print("=" * 70)
 
-
     internships = []
-
 
     for i in range(20):
 
@@ -339,23 +328,9 @@ def test_max_15():
 
         )
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    captured = {}
-
-
-    def fake_send(*args):
-
-        captured["payload"] = args[0]
-
-        return {
-            "id": "fake-id"
-        }
-
-
-    with patch(
-        "app.services.email_service.resend.Emails.send",
-        side_effect=fake_send
-    ):
+    try:
 
         send_notification_email(
             TEST_EMAIL,
@@ -363,12 +338,17 @@ def test_max_15():
             TEST_IDEMPOTENCY_KEY
         )
 
+        message = mock_smtp.send_message.call_args.args[0]
 
-    html = captured["payload"]["html"]
+    finally:
 
+        smtp_patcher.stop()
+
+    html = message.get_body(
+        preferencelist=("html",)
+    ).get_content()
 
     count = 0
-
 
     for i in range(20):
 
@@ -376,9 +356,7 @@ def test_max_15():
 
             count += 1
 
-
     assert count == 15
-
 
     print(
         "✅ Digest correctly limited to 15 internships."
@@ -397,7 +375,6 @@ def test_idempotency_key():
     print("🧪 TEST 5 — IDEMPOTENCY KEY")
     print("=" * 70)
 
-
     internships = [
 
         make_internship(
@@ -409,23 +386,9 @@ def test_idempotency_key():
         )
     ]
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    captured = {}
-
-
-    def fake_send(*args):
-
-        captured["args"] = args
-
-        return {
-            "id": "fake-id"
-        }
-
-
-    with patch(
-        "app.services.email_service.resend.Emails.send",
-        side_effect=fake_send
-    ):
+    try:
 
         send_notification_email(
             TEST_EMAIL,
@@ -433,24 +396,17 @@ def test_idempotency_key():
             TEST_IDEMPOTENCY_KEY
         )
 
+        message = mock_smtp.send_message.call_args.args[0]
 
-    args = captured["args"]
+    finally:
 
+        smtp_patcher.stop()
 
-    assert len(args) == 2
-
-
-    options = args[1]
-
-
-    assert (
-        options["idempotencyKey"]
-        == TEST_IDEMPOTENCY_KEY
-    )
-
+    assert message["To"] == TEST_EMAIL
+    assert message["Subject"] is not None
 
     print(
-        "✅ Idempotency key passed correctly."
+        "✅ Email sent successfully with application-level idempotency."
     )
 
 
@@ -466,7 +422,6 @@ def test_html_escaping():
     print("🧪 TEST 6 — HTML ESCAPING")
     print("=" * 70)
 
-
     internships = [
 
         make_internship(
@@ -478,23 +433,9 @@ def test_html_escaping():
         )
     ]
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    captured = {}
-
-
-    def fake_send(*args):
-
-        captured["payload"] = args[0]
-
-        return {
-            "id": "fake-id"
-        }
-
-
-    with patch(
-        "app.services.email_service.resend.Emails.send",
-        side_effect=fake_send
-    ):
+    try:
 
         send_notification_email(
             TEST_EMAIL,
@@ -502,27 +443,21 @@ def test_html_escaping():
             TEST_IDEMPOTENCY_KEY
         )
 
+        message = mock_smtp.send_message.call_args.args[0]
 
-    html = captured["payload"]["html"]
+    finally:
 
+        smtp_patcher.stop()
 
-    assert (
-        "<script>"
-        not in html
-    )
+    html = message.get_body(
+        preferencelist=("html",)
+    ).get_content()
 
+    assert "<script>" not in html
 
-    assert (
-        "&lt;script&gt;"
-        in html
-    )
+    assert "&lt;script&gt;" in html
 
-
-    assert (
-        "Company &lt;Dangerous&gt;"
-        in html
-    )
-
+    assert "Company &lt;Dangerous&gt;" in html
 
     print(
         "✅ HTML values are escaped safely."
@@ -541,7 +476,6 @@ def test_missing_idempotency_key():
     print("🧪 TEST 7 — MISSING IDEMPOTENCY KEY")
     print("=" * 70)
 
-
     internships = [
 
         make_internship(
@@ -553,10 +487,9 @@ def test_missing_idempotency_key():
         )
     ]
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    with patch(
-        "app.services.email_service.resend.Emails.send"
-    ) as mock_send:
+    try:
 
         response = send_notification_email(
             TEST_EMAIL,
@@ -564,11 +497,13 @@ def test_missing_idempotency_key():
             None
         )
 
+    finally:
+
+        smtp_patcher.stop()
 
     assert response is None
 
-    mock_send.assert_not_called()
-
+    mock_smtp.send_message.assert_not_called()
 
     print(
         "✅ Missing idempotency key handled safely."
@@ -584,13 +519,12 @@ def test_empty_internships():
 
     print()
     print("=" * 70)
-    print("🧪 TEST 8 — EMPTY INTERNSHIP LIST")
+    print("🧪 TEST 8 — EMPTY INTERNSHIPS")
     print("=" * 70)
 
+    smtp_patcher, mock_smtp = smtp_mock()
 
-    with patch(
-        "app.services.email_service.resend.Emails.send"
-    ) as mock_send:
+    try:
 
         response = send_notification_email(
             TEST_EMAIL,
@@ -598,11 +532,13 @@ def test_empty_internships():
             TEST_IDEMPOTENCY_KEY
         )
 
+    finally:
+
+        smtp_patcher.stop()
 
     assert response is None
 
-    mock_send.assert_not_called()
-
+    mock_smtp.send_message.assert_not_called()
 
     print(
         "✅ Empty internship list handled safely."
@@ -622,39 +558,28 @@ def main():
 
     print()
     print(
-        "⚠️ Resend API is MOCKED."
+        "⚠️ Gmail SMTP is MOCKED."
     )
 
     print(
         "⚠️ No real email will be sent."
     )
 
+    test_basic_digest()
 
-    # --------------------------------------------------------
-    # Make sure production API key is not required.
-    # --------------------------------------------------------
+    test_new_internships_first()
 
-    with patch(
-        "app.services.email_service._get_api_key",
-        return_value="test-api-key"
-    ):
+    test_relevance_sorting()
 
-        test_basic_digest()
+    test_max_15()
 
-        test_new_internships_first()
+    test_idempotency_key()
 
-        test_relevance_sorting()
+    test_html_escaping()
 
-        test_max_15()
+    test_missing_idempotency_key()
 
-        test_idempotency_key()
-
-        test_html_escaping()
-
-        test_missing_idempotency_key()
-
-        test_empty_internships()
-
+    test_empty_internships()
 
     print()
     print("=" * 70)

@@ -1,8 +1,8 @@
-# 🚀 Internship Notifier
+﻿# 🚀 Internship Notifier
 
 An automated internship discovery and notification system that searches for relevant internship opportunities, strictly filters internship listings, ranks them using AI-based semantic relevance scoring, prevents duplicate notifications, and delivers grouped email alerts.
 
-The system is built as a **production-oriented asynchronous application** using FastAPI, PostgreSQL, SerpAPI, APScheduler, ONNX Runtime, and Resend.
+The system is built as a **production-oriented asynchronous application** using FastAPI, PostgreSQL, SerpAPI, APScheduler, ONNX Runtime, and Gmail SMTP.
 
 It includes automated scheduling, grouped search execution, canonical URL-based internship uniqueness, user-level notification deduplication, notification idempotency, email retry handling, concurrency protection, user-specific dashboard isolation, internship dismissal, and 45-day retention cleanup.
 
@@ -238,7 +238,7 @@ The production-oriented architecture consists of:
                                                       ▼
                                               ┌────────────────┐
                                               │ EMAIL DISPATCH │
-                                              │     RESEND     │
+                                              │  GMAIL SMTP    │
                                               └───────┬────────┘
                                                       │
                                                ┌──────┴──────┐
@@ -955,7 +955,7 @@ Notification Creation
        ↓
 Notification Dispatcher
        ↓
-Resend
+Gmail SMTP
        ↓
 Email Delivery
        ↓
@@ -1012,7 +1012,7 @@ Render Web Service
         │
         ├── SerpAPI
         │
-        ├── Resend
+        ├── Gmail SMTP
         │
         ├── APScheduler
         │
@@ -1045,7 +1045,7 @@ SCHEDULER_ENABLED=true
 | Model Optimization      | QInt8 Dynamic Quantization |
 | Tokenization            | Hugging Face Tokenizers    |
 | Scheduler               | APScheduler                |
-| Email                   | Resend                     |
+| Email                   | Gmail SMTP                     |
 | Vector Database Support | pgvector                   |
 | Frontend                | HTML, CSS, JavaScript      |
 | Testing                 | Pytest                     |
@@ -1168,7 +1168,11 @@ Required configuration:
 ```text
 DATABASE_URL=
 SERPAPI_API_KEY=
-RESEND_API_KEY=
+SMTP_EMAIL=
+SMTP_APP_PASSWORD=
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+FROM_EMAIL=
 FROM_EMAIL=
 SCHEDULER_ENABLED=
 CORS_ORIGINS=
@@ -1256,7 +1260,11 @@ Important environment variables include:
 ```text
 DATABASE_URL
 SERPAPI_API_KEY
-RESEND_API_KEY
+SMTP_EMAIL
+SMTP_APP_PASSWORD
+SMTP_HOST
+SMTP_PORT
+FROM_EMAIL
 FROM_EMAIL
 SCHEDULER_ENABLED
 CORS_ORIGINS
