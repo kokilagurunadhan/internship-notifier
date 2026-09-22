@@ -1614,7 +1614,7 @@ async def dispatch_pending_notifications_batch() -> int:
            ↓
         MAX 15
            ↓
-        GMAIL SMTP
+        BREVO API
            ↓
         SENT
     """

@@ -2,7 +2,7 @@
 
 An automated internship discovery and notification system that searches for relevant internship opportunities, strictly filters internship listings, ranks them using AI-based semantic relevance scoring, prevents duplicate notifications, and delivers grouped email alerts.
 
-The system is built as a **production-oriented asynchronous application** using FastAPI, PostgreSQL, SerpAPI, APScheduler, ONNX Runtime, and Gmail SMTP.
+The system is built as a **production-oriented asynchronous application** using FastAPI, PostgreSQL, SerpAPI, APScheduler, ONNX Runtime, and the Brevo API.
 
 It includes automated scheduling, grouped search execution, canonical URL-based internship uniqueness, user-level notification deduplication, notification idempotency, email retry handling, concurrency protection, user-specific dashboard isolation, internship dismissal, and 45-day retention cleanup.
 
@@ -238,7 +238,7 @@ The production-oriented architecture consists of:
                                                       ▼
                                               ┌────────────────┐
                                               │ EMAIL DISPATCH │
-                                              │  GMAIL SMTP    │
+                                              │  BREVO API     │
                                               └───────┬────────┘
                                                       │
                                                ┌──────┴──────┐
@@ -955,7 +955,7 @@ Notification Creation
        ↓
 Notification Dispatcher
        ↓
-Gmail SMTP
+Brevo API
        ↓
 Email Delivery
        ↓
@@ -1012,7 +1012,7 @@ Render Web Service
         │
         ├── SerpAPI
         │
-        ├── Gmail SMTP
+        ├── Brevo API
         │
         ├── APScheduler
         │
@@ -1045,7 +1045,7 @@ SCHEDULER_ENABLED=true
 | Model Optimization      | QInt8 Dynamic Quantization |
 | Tokenization            | Hugging Face Tokenizers    |
 | Scheduler               | APScheduler                |
-| Email                   | Gmail SMTP                     |
+| Email                   |Brevo API                     |
 | Vector Database Support | pgvector                   |
 | Frontend                | HTML, CSS, JavaScript      |
 | Testing                 | Pytest                     |
@@ -1168,10 +1168,10 @@ Required configuration:
 ```text
 DATABASE_URL=
 SERPAPI_API_KEY=
-SMTP_EMAIL=
-SMTP_APP_PASSWORD=
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
+BERVO_EMAIL=
+BERVO_APP_PASSWORD=
+BERVO_HOST=bervo.gmail.com
+BERVO_PORT=465
 FROM_EMAIL=
 FROM_EMAIL=
 SCHEDULER_ENABLED=
@@ -1260,10 +1260,10 @@ Important environment variables include:
 ```text
 DATABASE_URL
 SERPAPI_API_KEY
-SMTP_EMAIL
-SMTP_APP_PASSWORD
-SMTP_HOST
-SMTP_PORT
+BERVO_EMAIL
+BERVO_APP_PASSWORD
+BERVO_HOST
+BERVO_PORT
 FROM_EMAIL
 FROM_EMAIL
 SCHEDULER_ENABLED

@@ -4,7 +4,8 @@
 # ============================================================
 
 from datetime import datetime, timezone
-from unittest.mock import patch
+import os
+from unittest.mock import patch, MagicMock
 
 from app.services.email_service import (
     send_notification_email,
@@ -42,25 +43,60 @@ def make_internship(
 
 
 # ============================================================
-# SMTP MOCK HELPER
+# BREVO MOCK HELPER
 # ============================================================
 
-def smtp_mock():
+class BrevoPatcher:
+    """Concrete patcher wrapper used to mock Brevo requests in tests."""
 
-    smtp_patcher = patch(
-        "app.services.email_service.smtplib.SMTP_SSL"
+    def __init__(self):
+        self._patcher = patch(
+            "app.services.email_service.requests.post"
+        )
+        self.new = None
+
+    def start(self):
+        self.new = self._patcher.start()
+        return self
+
+    def stop(self):
+        self._patcher.stop()
+
+    def __enter__(self):
+        return self.start()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
+        return False
+
+
+def brevo_mock():
+
+    brevo_patcher = BrevoPatcher().start()
+
+    env_patcher = patch.dict(
+        os.environ,
+        {
+            "BREVO_API_KEY": "test-brevo-api-key",
+            "FROM_EMAIL": "test@example.com",
+        },
     )
 
-    mock_smtp_class = smtp_patcher.start()
+    env_patcher.start()
 
-    mock_smtp = mock_smtp_class.return_value
+    mock_post = brevo_patcher.new
 
-    mock_smtp.__enter__.return_value = mock_smtp
-    mock_smtp.__exit__.return_value = False
+    mock_response = MagicMock()
 
-    return smtp_patcher, mock_smtp
+    mock_response.json.return_value = {
+        "messageId": "test-brevo-message-id"
+    }
 
+    mock_response.raise_for_status.return_value = None
 
+    mock_post.return_value = mock_response
+
+    return brevo_patcher, env_patcher, mock_post
 # ============================================================
 # TEST 1
 # BASIC DIGEST
@@ -121,8 +157,7 @@ def test_basic_digest():
         ),
     ]
 
-    smtp_patcher, mock_smtp = smtp_mock()
-
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
     try:
 
         response = send_notification_email(
@@ -133,15 +168,15 @@ def test_basic_digest():
 
     finally:
 
-        smtp_patcher.stop()
+        brevo_patcher.stop()
+        env_patcher.stop()
 
     assert response is True
 
-    mock_smtp.login.assert_called_once()
-    mock_smtp.send_message.assert_called_once()
+    mock_post.assert_called_once()
 
     print("✅ Email function returned successfully.")
-    print("✅ Gmail SMTP send_message() was called exactly once.")
+    print("✅ Brevo API was called exactly once.")
 
 
 # ============================================================
@@ -189,7 +224,7 @@ def test_new_internships_first():
         ),
     ]
 
-    smtp_patcher, mock_smtp = smtp_mock()
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
 
     try:
 
@@ -199,17 +234,15 @@ def test_new_internships_first():
             TEST_IDEMPOTENCY_KEY
         )
 
-        message = mock_smtp.send_message.call_args.args[0]
+        payload = mock_post.call_args.kwargs["json"]
 
     finally:
 
-        smtp_patcher.stop()
-
+        brevo_patcher.stop()
+        env_patcher.stop()
     assert response is True
 
-    email_html = message.get_body(
-        preferencelist=("html",)
-    ).get_content()
+    email_html = payload["htmlContent"]
 
     new_position = email_html.find(
         "NEW LOW SCORE"
@@ -267,9 +300,7 @@ def test_relevance_sorting():
             datetime.now(timezone.utc)
         ),
     ]
-
-    smtp_patcher, mock_smtp = smtp_mock()
-
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
     try:
 
         send_notification_email(
@@ -278,15 +309,13 @@ def test_relevance_sorting():
             TEST_IDEMPOTENCY_KEY
         )
 
-        message = mock_smtp.send_message.call_args.args[0]
+        payload = mock_post.call_args.kwargs["json"]
 
     finally:
 
-        smtp_patcher.stop()
-
-    html = message.get_body(
-        preferencelist=("html",)
-    ).get_content()
+        brevo_patcher.stop()
+        env_patcher.stop()
+    html = payload["htmlContent"]
 
     position_90 = html.find("Score 90")
     position_75 = html.find("Score 75")
@@ -328,7 +357,7 @@ def test_max_15():
 
         )
 
-    smtp_patcher, mock_smtp = smtp_mock()
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
 
     try:
 
@@ -338,15 +367,13 @@ def test_max_15():
             TEST_IDEMPOTENCY_KEY
         )
 
-        message = mock_smtp.send_message.call_args.args[0]
+        payload = mock_post.call_args.kwargs["json"]
 
     finally:
 
-        smtp_patcher.stop()
-
-    html = message.get_body(
-        preferencelist=("html",)
-    ).get_content()
+      brevo_patcher.stop()
+      env_patcher.stop()
+      html = payload["htmlContent"]
 
     count = 0
 
@@ -386,7 +413,7 @@ def test_idempotency_key():
         )
     ]
 
-    smtp_patcher, mock_smtp = smtp_mock()
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
 
     try:
 
@@ -396,14 +423,18 @@ def test_idempotency_key():
             TEST_IDEMPOTENCY_KEY
         )
 
-        message = mock_smtp.send_message.call_args.args[0]
+        payload = mock_post.call_args.kwargs["json"]
+        headers = mock_post.call_args.kwargs["headers"]
 
     finally:
 
-        smtp_patcher.stop()
+        brevo_patcher.stop()
+        env_patcher.stop()
 
-    assert message["To"] == TEST_EMAIL
-    assert message["Subject"] is not None
+    assert payload["to"][0]["email"] == TEST_EMAIL
+    assert payload["subject"] is not None
+
+    assert headers["idempotency-key"] == TEST_IDEMPOTENCY_KEY
 
     print(
         "✅ Email sent successfully with application-level idempotency."
@@ -433,7 +464,7 @@ def test_html_escaping():
         )
     ]
 
-    smtp_patcher, mock_smtp = smtp_mock()
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
 
     try:
 
@@ -443,15 +474,14 @@ def test_html_escaping():
             TEST_IDEMPOTENCY_KEY
         )
 
-        message = mock_smtp.send_message.call_args.args[0]
+        payload = mock_post.call_args.kwargs["json"]
 
     finally:
 
-        smtp_patcher.stop()
+        brevo_patcher.stop()
+        env_patcher.stop()
 
-    html = message.get_body(
-        preferencelist=("html",)
-    ).get_content()
+    html = payload["htmlContent"]
 
     assert "<script>" not in html
 
@@ -487,7 +517,7 @@ def test_missing_idempotency_key():
         )
     ]
 
-    smtp_patcher, mock_smtp = smtp_mock()
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
 
     try:
 
@@ -499,11 +529,12 @@ def test_missing_idempotency_key():
 
     finally:
 
-        smtp_patcher.stop()
+        brevo_patcher.stop()
+        env_patcher.stop()
 
     assert response is None
 
-    mock_smtp.send_message.assert_not_called()
+    mock_post.assert_not_called()
 
     print(
         "✅ Missing idempotency key handled safely."
@@ -522,7 +553,7 @@ def test_empty_internships():
     print("🧪 TEST 8 — EMPTY INTERNSHIPS")
     print("=" * 70)
 
-    smtp_patcher, mock_smtp = smtp_mock()
+    brevo_patcher, env_patcher, mock_post = brevo_mock()
 
     try:
 
@@ -534,11 +565,12 @@ def test_empty_internships():
 
     finally:
 
-        smtp_patcher.stop()
+        brevo_patcher.stop()
+        env_patcher.stop()
 
     assert response is None
 
-    mock_smtp.send_message.assert_not_called()
+    mock_post.assert_not_called()
 
     print(
         "✅ Empty internship list handled safely."
@@ -558,7 +590,7 @@ def main():
 
     print()
     print(
-        "⚠️ Gmail SMTP is MOCKED."
+        "⚠️ Brevo API is MOCKED."
     )
 
     print(

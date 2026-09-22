@@ -57,7 +57,7 @@ def fake_send_notification_email(
     print(f"   Idempotency  : {idempotency_key}")
 
     return {
-        "id": "fake-gmail-smtp-id",
+        "id": "fake-brevo-message-id",
         "status": "sent",
     }
 

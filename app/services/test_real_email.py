@@ -1,5 +1,5 @@
 # ============================================================
-#  REAL GMAIL SMTP EMAIL TEST
+#  REAL GMAIL bervo EMAIL TEST
 # File: app/services/test_real_email.py
 # ============================================================
 
@@ -47,7 +47,7 @@ TEST_INTERNSHIP = {
 def main():
 
     print("=" * 65)
-    print("REAL GMAIL SMTP EMAIL TEST")
+    print("REAL BREVO API EMAIL TEST")
     print("=" * 65)
 
     print()
@@ -78,7 +78,7 @@ def main():
         raise SystemExit(1)
 
     print(
-        "✅ Gmail SMTP accepted the email"
+        "✅ Brevo API accepted the email"
     )
 
     print()

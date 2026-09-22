@@ -6,10 +6,10 @@
 import os
 import html
 import logging
-import smtplib
+
 
 from datetime import datetime, timezone
-from email.message import EmailMessage
+import requests
 
 from dotenv import load_dotenv
 
@@ -36,44 +36,86 @@ MAX_INTERNSHIPS_PER_EMAIL = 15
 
 
 # ============================================================
-# SMTP CONFIGURATION
+# bervo  CONFIGURATION
 # ============================================================
 
-def _get_smtp_config():
+# ============================================================
+# BREVO API CONFIGURATION
+# ============================================================
 
-    smtp_email = os.getenv("SMTP_EMAIL")
-    smtp_app_password = os.getenv("SMTP_APP_PASSWORD")
-    smtp_host = os.getenv(
-        "SMTP_HOST",
-        "smtp.gmail.com"
-    )
-    smtp_port = int(
-        os.getenv(
-            "SMTP_PORT",
-            "465"
-        )
-    )
+def _get_brevo_config():
 
-    if not smtp_email:
+    api_key = os.getenv("BREVO_API_KEY")
+    from_email = os.getenv("FROM_EMAIL")
+
+    if not api_key:
         logger.error(
-            "❌ SMTP_EMAIL environment variable is missing."
+            "❌ BREVO_API_KEY environment variable is missing."
         )
         return None
 
-    if not smtp_app_password:
+    if not from_email:
         logger.error(
-            "❌ SMTP_APP_PASSWORD environment variable is missing."
+            "❌ FROM_EMAIL environment variable is missing."
         )
         return None
 
-    return (
-        smtp_email,
-        smtp_app_password.replace(" ", ""),
-        smtp_host,
-        smtp_port
+    return api_key, from_email
+# ============================================================
+# SEND EMAIL THROUGH BREVO HTTPS API
+# ============================================================
+
+def _send_via_brevo(
+    api_key: str,
+    from_email: str,
+    recipient_email: str,
+    subject: str,
+    text_content: str,
+    html_content: str,
+    idempotency_key: str | None = None
+):
+
+    payload = {
+        "sender": {
+            "name": "Internship Notifier",
+            "email": from_email
+        },
+        "to": [
+            {
+                "email": recipient_email
+            }
+        ],
+        "subject": subject,
+        "textContent": text_content,
+        "htmlContent": html_content
+    }
+
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
+
+    if idempotency_key:
+        headers["idempotency-key"] = str(idempotency_key)
+
+    response = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers=headers,
+        json=payload,
+        timeout=30
     )
 
+    response.raise_for_status()
 
+    data = response.json()
+
+    logger.info(
+        "✅ Brevo accepted email | messageId=%s",
+        data.get("messageId")
+    )
+
+    return True
 # ============================================================
 # HTML ESCAPE
 # ============================================================
@@ -335,7 +377,6 @@ def _prioritize_internships(
 # ============================================================
 # SEND SINGLE INTERNSHIP EMAIL
 # ============================================================
-
 def send_internship_email(
     recipient_email: str,
     company: str,
@@ -345,84 +386,58 @@ def send_internship_email(
 ):
 
     # ========================================================
-    # SMTP CONFIGURATION
+    # BREVO CONFIGURATION
     # ========================================================
 
-    smtp_config = _get_smtp_config()
+    brevo_config = _get_brevo_config()
 
-    if not smtp_config:
-
+    if not brevo_config:
         return None
 
-
     (
-        smtp_email,
-        smtp_app_password,
-        smtp_host,
-        smtp_port
-    ) = smtp_config
-
+        api_key,
+        from_email
+    ) = brevo_config
 
     # ========================================================
     # RECIPIENT
     # ========================================================
 
     if not recipient_email:
-
         logger.error(
             "❌ Recipient email is missing."
         )
-
         return None
-
 
     # ========================================================
     # ESCAPE INPUT
     # ========================================================
 
-    safe_company = _escape(
-        company
-    )
+    safe_company = _escape(company)
 
-    safe_title = _escape(
-        title
-    )
+    safe_title = _escape(title)
 
     safe_location = (
         _escape(location)
         or "Location not specified"
     )
 
-    safe_url = _escape(
-        url
-    )
-
+    safe_url = _escape(url)
 
     # ========================================================
-    # FROM EMAIL
+    # SUBJECT
     # ========================================================
 
-    from_email = os.getenv(
-        "FROM_EMAIL"
-    ) or smtp_email
-
-
-    # ========================================================
-    # BUILD EMAIL
-    # ========================================================
-
-    message = EmailMessage()
-
-    message["From"] = from_email
-
-    message["To"] = recipient_email
-
-    message["Subject"] = (
+    subject = (
         f"New {safe_company} "
         f"Internship Found!"
     )
 
-    message.set_content(
+    # ========================================================
+    # PLAIN TEXT CONTENT
+    # ========================================================
+
+    text_content = (
         "A new internship matching "
         "your subscription has been found.\n\n"
         f"Company: {company}\n"
@@ -432,100 +447,88 @@ def send_internship_email(
         "Internship Notifier 🤖"
     )
 
+    # ========================================================
+    # HTML CONTENT
+    # ========================================================
 
-    message.add_alternative(
-        f"""
-        <html>
+    html_content = f"""
+    <html>
 
-        <body
-            style="
-                font-family:Arial,sans-serif;
-                line-height:1.6;
-            "
-        >
+    <body
+        style="
+            font-family:Arial,sans-serif;
+            line-height:1.6;
+        "
+    >
 
-            <h2>
-                🎉 New Internship Found!
-            </h2>
+        <h2>
+            🎉 New Internship Found!
+        </h2>
 
-            <p>
-                A new internship matching
-                your subscription has been found.
-            </p>
+        <p>
+            A new internship matching
+            your subscription has been found.
+        </p>
 
-            <hr>
+        <hr>
 
-            <p>
-                <strong>Company:</strong>
-                {safe_company}
-            </p>
+        <p>
+            <strong>Company:</strong>
+            {safe_company}
+        </p>
 
-            <p>
-                <strong>Role:</strong>
-                {safe_title}
-            </p>
+        <p>
+            <strong>Role:</strong>
+            {safe_title}
+        </p>
 
-            <p>
-                <strong>Location:</strong>
-                {safe_location}
-            </p>
+        <p>
+            <strong>Location:</strong>
+            {safe_location}
+        </p>
 
-            <br>
+        <br>
 
-            <p>
+        <p>
 
-                <a
-                    href="{safe_url}"
-                    target="_blank"
-                >
-                    👉 View Internship
-                </a>
+            <a
+                href="{safe_url}"
+                target="_blank"
+            >
+                👉 View Internship
+            </a>
 
-            </p>
+        </p>
 
-            <hr>
+        <hr>
 
-            <p>
-                Internship Notifier 🤖
-            </p>
+        <p>
+            Internship Notifier 🤖
+        </p>
 
-        </body>
+    </body>
 
-        </html>
-        """,
-        subtype="html"
-    )
-
+    </html>
+    """
 
     # ========================================================
-    # SEND
+    # SEND THROUGH BREVO
     # ========================================================
 
     try:
 
-        with smtplib.SMTP_SSL(
-            smtp_host,
-            smtp_port,
-            timeout=30
-        ) as smtp:
-
-            smtp.login(
-                smtp_email,
-                smtp_app_password
-            )
-
-            smtp.send_message(
-                message
-            )
-
-
         logger.info(
-            "📧 Single internship email sent via Gmail SMTP"
+            "📧 Sending single internship email via Brevo"
         )
 
-
-        return True
-
+        return _send_via_brevo(
+            api_key=api_key,
+            from_email=from_email,
+            recipient_email=recipient_email,
+            subject=subject,
+            text_content=text_content,
+            html_content=html_content
+        )
 
     except Exception as error:
 
@@ -535,11 +538,10 @@ def send_internship_email(
         )
 
         return None
-
-
 # ============================================================
 # SEND COMBINED NOTIFICATION DIGEST
 # ============================================================
+
 
 def send_notification_email(
     recipient_email: str,
@@ -548,23 +550,18 @@ def send_notification_email(
 ):
 
     # ========================================================
-    # SMTP CONFIGURATION
+    # BREVO CONFIGURATION
     # ========================================================
 
-    smtp_config = _get_smtp_config()
+    brevo_config = _get_brevo_config()
 
-    if not smtp_config:
-
+    if not brevo_config:
         return None
 
-
     (
-        smtp_email,
-        smtp_app_password,
-        smtp_host,
-        smtp_port
-    ) = smtp_config
-
+        api_key,
+        from_email
+    ) = brevo_config
 
     # ========================================================
     # RECIPIENT
@@ -578,13 +575,12 @@ def send_notification_email(
 
         return None
 
-
     # ========================================================
     # IDEMPOTENCY KEY
     #
     # Kept because the dispatcher passes it.
-    # Actual idempotency is handled by the
-    # notification database state.
+    # Actual application-level idempotency is handled
+    # by the notification database state.
     #
     # ========================================================
 
@@ -596,11 +592,9 @@ def send_notification_email(
 
         return None
 
-
     idempotency_key = str(
         idempotency_key
     )
-
 
     if len(
         idempotency_key
@@ -612,7 +606,6 @@ def send_notification_email(
         )
 
         return None
-
 
     # ========================================================
     # INPUT
@@ -626,13 +619,13 @@ def send_notification_email(
 
         return None
 
-
     # ========================================================
     # PRIORITIZE
     #
     # NEW FIRST
     # THEN OLD
     # MAX 15
+    #
     # ========================================================
 
     selected_internships = (
@@ -642,7 +635,6 @@ def send_notification_email(
         )
     )
 
-
     if not selected_internships:
 
         logger.warning(
@@ -651,7 +643,6 @@ def send_notification_email(
         )
 
         return None
-
 
     # ========================================================
     # COUNTS
@@ -673,7 +664,6 @@ def send_notification_email(
         )
     )
 
-
     old_count = (
         len(
             selected_internships
@@ -681,11 +671,9 @@ def send_notification_email(
         - new_count
     )
 
-
     total_count = len(
         selected_internships
     )
-
 
     logger.info(
         "📧 Preparing digest | "
@@ -694,7 +682,6 @@ def send_notification_email(
         new_count,
         old_count
     )
-
 
     # ========================================================
     # SUBJECT
@@ -716,13 +703,11 @@ def send_notification_email(
             f" for You"
         )
 
-
     # ========================================================
     # BUILD HTML
     # ========================================================
 
     internship_html = []
-
 
     for index, internship in enumerate(
         selected_internships,
@@ -737,7 +722,6 @@ def send_notification_email(
             )
         )
 
-
         company = _escape(
             _get_field(
                 internship,
@@ -745,7 +729,6 @@ def send_notification_email(
                 ""
             )
         )
-
 
         location = (
             _escape(
@@ -758,7 +741,6 @@ def send_notification_email(
             or "Location not specified"
         )
 
-
         url = _escape(
             _get_field(
                 internship,
@@ -766,7 +748,6 @@ def send_notification_email(
                 ""
             )
         )
-
 
         relevance_score = (
             _get_field(
@@ -777,7 +758,6 @@ def send_notification_email(
             or 0
         )
 
-
         is_new = bool(
             _get_field(
                 internship,
@@ -785,7 +765,6 @@ def send_notification_email(
                 False
             )
         )
-
 
         # ====================================================
         # BADGE
@@ -823,7 +802,6 @@ def send_notification_email(
                 Previous
             </span>
             """
-
 
         internship_html.append(
             f"""
@@ -875,11 +853,9 @@ def send_notification_email(
             """
         )
 
-
     internship_html = "".join(
         internship_html
     )
-
 
     # ========================================================
     # NEW JOB MESSAGE
@@ -899,7 +875,6 @@ def send_notification_email(
 
         new_header = ""
 
-
     # ========================================================
     # FINAL EMAIL HTML
     # ========================================================
@@ -909,7 +884,6 @@ def send_notification_email(
         if total_count != 1
         else "opportunity"
     )
-
 
     email_html = f"""
     <html>
@@ -957,80 +931,40 @@ def send_notification_email(
     </html>
     """
 
-
     # ========================================================
-    # FROM EMAIL
-    # ========================================================
-
-    from_email = os.getenv(
-        "FROM_EMAIL"
-    ) or smtp_email
-
-
-    # ========================================================
-    # BUILD EMAIL
+    # PLAIN TEXT CONTENT
     # ========================================================
 
-    message = EmailMessage()
-
-    message["From"] = from_email
-
-    message["To"] = recipient_email
-
-    message["Subject"] = subject
-
-    message.set_content(
+    text_content = (
         f"We found {total_count} "
-        f"internship opportunities matching "
-        f"your subscriptions.\n\n"
+        f"internship {opportunity_word} "
+        "matching your subscriptions.\n\n"
         "Please open the HTML version of this "
         "email to view the internship links.\n\n"
         "— Internship Notifier"
     )
 
-
-    message.add_alternative(
-        email_html,
-        subtype="html"
-    )
-
-
     # ========================================================
-    # SEND DIGEST
+    # SEND DIGEST THROUGH BREVO
     # ========================================================
 
     try:
 
         logger.info(
-            "🔐 Sending digest email via Gmail SMTP | "
+            "🔐 Sending digest email via Brevo | "
             "Idempotency=%s",
             idempotency_key
         )
 
-
-        with smtplib.SMTP_SSL(
-            smtp_host,
-            smtp_port,
-            timeout=30
-        ) as smtp:
-
-            smtp.login(
-                smtp_email,
-                smtp_app_password
-            )
-
-            smtp.send_message(
-                message
-            )
-
-
-        logger.info(
-            "✅ Digest email sent via Gmail SMTP"
+        return _send_via_brevo(
+            api_key=api_key,
+            from_email=from_email,
+            recipient_email=recipient_email,
+            subject=subject,
+            text_content=text_content,
+            html_content=email_html,
+            idempotency_key=idempotency_key
         )
-
-
-        return True
-
 
     except Exception as error:
 
