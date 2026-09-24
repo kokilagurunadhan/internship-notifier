@@ -1,0 +1,17 @@
+name: Internship Scheduler
+
+on:
+  schedule:
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger-internship-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render pipeline
+        run: |
+          curl -X POST \
+            "https://internship-notifier.onrender.com/internal/run-internship-pipeline" \
+            -H "X-Scheduler-Token: ${{ secrets.SCHEDULER_TRIGGER_TOKEN }}"
