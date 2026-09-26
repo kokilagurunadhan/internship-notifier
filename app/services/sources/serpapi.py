@@ -18,10 +18,12 @@ API_KEY = os.getenv("SERPAPI_API_KEY")
 # ============================================================
 
 def search_jobs(company, domain=None, location="India"):
+
     if not API_KEY:
         raise ValueError("SERPAPI_API_KEY is missing from .env")
 
     query = f"{company} internship"
+
     if domain:
         query += f" {domain}"
 
@@ -41,13 +43,38 @@ def search_jobs(company, domain=None, location="India"):
         timeout=30
     )
 
+    # ========================================================
+    # SERPAPI SEARCH LIMIT EXHAUSTED
+    # ========================================================
+
+    if response.status_code == 429:
+
+        print(
+            "   ⚠️ SerpAPI search limit reached. "
+            "Skipping this search."
+        )
+
+        return []
+
+    # ========================================================
+    # OTHER HTTP ERRORS
+    # ========================================================
+
     response.raise_for_status()
 
+    # ========================================================
+    # SUCCESS
+    # ========================================================
+
     data = response.json()
+
     jobs = data.get("jobs_results", [])
 
     print(f"   🎯 SerpAPI returned {len(jobs)} jobs")
+
     return jobs
+
+
 # ============================================================
 # DIRECT TEST
 # ============================================================
@@ -59,18 +86,13 @@ if __name__ == "__main__":
     print("RAW SERPAPI JOB SEARCH TEST")
     print("=" * 70)
 
-
     jobs = search_jobs(
         company="Microsoft",
         domain="software engineering"
     )
 
-
     print()
-    print(
-        f"📦 Raw jobs received: {len(jobs)}"
-    )
-
+    print(f"📦 Raw jobs received: {len(jobs)}")
 
     for index, job in enumerate(
         jobs[:10],
@@ -78,50 +100,25 @@ if __name__ == "__main__":
     ):
 
         print()
-        print(
-            f"JOB {index}"
-        )
+        print(f"JOB {index}")
+        print("-" * 70)
 
-        print(
-            "-" * 70
-        )
-
-        print(
-            "Title:",
-            job.get("title")
-        )
-
-        print(
-            "Company:",
-            job.get("company_name")
-        )
-
-        print(
-            "Location:",
-            job.get("location")
-        )
-
-        print(
-            "Via:",
-            job.get("via")
-        )
-
+        print("Title:", job.get("title"))
+        print("Company:", job.get("company_name"))
+        print("Location:", job.get("location"))
+        print("Via:", job.get("via"))
         print(
             "Description:",
             (job.get("description") or "")[:300]
         )
+        print("Apply:", job.get("apply_options"))
 
-        print(
-            "Apply:",
-            job.get("apply_options")
-        )
-
-        print(
-            "-" * 70
-        )
-
+        print("-" * 70)
 
     print()
-    print(
-        "✅ Raw SerpAPI search completed!"
-    )
+    print("✅ Raw SerpAPI search completed!")
+# ============================================================
+# DIRECT TEST
+# ============================================================
+
+
